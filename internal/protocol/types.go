@@ -83,6 +83,18 @@ type LightingSettings struct {
 	ColorMode  byte
 }
 
+const CustomStaticLightingEffect byte = 75
+
+type KeyColor struct {
+	Key              byte
+	Red, Green, Blue byte
+}
+
+type CustomLightingSettings struct {
+	Brightness int
+	Colors     []KeyColor
+}
+
 type MPTStage struct {
 	PressMM   float64
 	ReleaseMM float64
@@ -178,6 +190,30 @@ func decodeBrightness(code byte) int {
 		return 0
 	}
 	return int(code-5) * 25
+}
+
+func encodeCustomBrightness(percent int) byte {
+	if percent <= 0 {
+		return 0
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	code := int(math.Round(float64(percent) / 25))
+	if code < 1 {
+		code = 1
+	}
+	if code > 4 {
+		code = 4
+	}
+	return byte(code)
+}
+
+func decodeCustomBrightness(code byte) int {
+	if code > 4 {
+		code = 4
+	}
+	return int(code) * 25
 }
 
 func encodeSpeed(percent int) byte {

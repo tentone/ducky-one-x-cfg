@@ -9,7 +9,7 @@ A native, offline desktop configurator for the Ducky One X keyboard. It is writt
 - Auto Sync enabled by default, with debounced live updates for lighting, actuation, MPT presets, and macros
 - Switch between both onboard memory profiles and immediately load the selected profile
 - Visual full-size keyboard with click-to-edit Base and Fn key assignments
-- Interactive lighting previews driven by physical key presses: single-key reactive pulses, press-centered ripple, three directional rainbow patterns, and a full-key analog light bar that moves from bottom to top
+- Interactive lighting previews driven by physical key presses: single-key reactive pulses, press-centered ripple, three directional rainbow patterns, a full-key analog light bar, and per-key color painting
 - Per-key actuation overlays, click feedback, and rapid-trigger settings across all 126 matrix positions
 - Four-stage multi-point-trigger presets (MPT1–MPT14)
 - Fourteen onboard macro slots with press, release, click, delay, and text actions

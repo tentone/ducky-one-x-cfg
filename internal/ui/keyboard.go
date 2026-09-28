@@ -330,6 +330,7 @@ type LightingAnimator struct {
 	mu       sync.RWMutex
 	settings protocol.LightingSettings
 	presses  map[int]time.Time
+	custom   map[int]color.NRGBA
 	done     chan struct{}
 	stopOnce sync.Once
 	start    time.Time
@@ -338,6 +339,7 @@ type LightingAnimator struct {
 func NewLightingAnimator(keyboard *KeyboardView) *LightingAnimator {
 	animator := &LightingAnimator{
 		keyboard: keyboard, done: make(chan struct{}), start: time.Now(), presses: make(map[int]time.Time),
+		custom:   make(map[int]color.NRGBA),
 		settings: protocol.LightingSettings{Effect: 13, Red: 234, Green: 168, Blue: 42, Brightness: 100, Speed: 50},
 	}
 	go animator.loop()
@@ -353,6 +355,15 @@ func (a *LightingAnimator) Set(settings protocol.LightingSettings) {
 func (a *LightingAnimator) Press(index int) {
 	a.mu.Lock()
 	a.presses[index] = time.Now()
+	a.mu.Unlock()
+}
+
+func (a *LightingAnimator) SetCustomColors(colors map[int]color.NRGBA) {
+	a.mu.Lock()
+	a.custom = make(map[int]color.NRGBA, len(colors))
+	for index, keyColor := range colors {
+		a.custom[index] = keyColor
+	}
 	a.mu.Unlock()
 }
 
@@ -372,14 +383,18 @@ func (a *LightingAnimator) loop() {
 			for index, pressedAt := range a.presses {
 				presses[index] = pressedAt
 			}
+			custom := make(map[int]color.NRGBA, len(a.custom))
+			for index, keyColor := range a.custom {
+				custom[index] = keyColor
+			}
 			a.mu.RUnlock()
 			elapsed := now.Sub(a.start).Seconds()
-			fyne.Do(func() { a.draw(settings, elapsed, now, presses) })
+			fyne.Do(func() { a.draw(settings, elapsed, now, presses, custom) })
 		}
 	}
 }
 
-func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed float64, now time.Time, presses map[int]time.Time) {
+func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed float64, now time.Time, presses map[int]time.Time, custom map[int]color.NRGBA) {
 	brightness := float64(settings.Brightness) / 100
 	if brightness <= 0 && settings.Effect != 103 {
 		brightness = 0.05
@@ -460,6 +475,12 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 			if analogKeyIsLit(analogDepth, key.y, key.height) {
 				keyValue = value * brightness
 			}
+		case protocol.CustomStaticLightingEffect:
+			keyValue = 0.025
+			saturation = 0
+			if keyColor, ok := custom[index]; ok {
+				directColor = scaleColor(keyColor, brightness)
+			}
 		case 103: // Off
 			keyValue = 0.035
 			saturation = 0
@@ -471,6 +492,16 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 		red, green, blue := hsvToRGB(hue, saturation, math.Min(1, keyValue))
 		key.SetColor(color.NRGBA{R: red, G: green, B: blue, A: 255})
 	})
+}
+
+func scaleColor(value color.NRGBA, amount float64) color.NRGBA {
+	amount = math.Max(0, math.Min(1, amount))
+	return color.NRGBA{
+		R: byte(math.Round(float64(value.R) * amount)),
+		G: byte(math.Round(float64(value.G) * amount)),
+		B: byte(math.Round(float64(value.B) * amount)),
+		A: 255,
+	}
 }
 
 func rippleIntensity(age, distance, speed float64) float64 {

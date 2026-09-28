@@ -286,6 +286,7 @@ type configurationSnapshot struct {
 	layer     int
 	mapping   []protocol.Assignment
 	lighting  protocol.LightingSettings
+	custom    protocol.CustomLightingSettings
 	actuation []protocol.ActuationSetting
 	mpt       []protocol.MPTStage
 	macros    []protocol.MacroAction
@@ -309,6 +310,12 @@ func (u *UI) readConfiguration(ctx context.Context, client *protocol.Client) (co
 	if snapshot.lighting, err = client.Lighting(ctx); err != nil {
 		return snapshot, fmt.Errorf("read lighting: %w", err)
 	}
+	if snapshot.lighting.Effect == protocol.CustomStaticLightingEffect {
+		if snapshot.custom, err = client.CustomLighting(ctx); err != nil {
+			return snapshot, fmt.Errorf("read custom lighting: %w", err)
+		}
+		snapshot.lighting.Brightness = snapshot.custom.Brightness
+	}
 	if snapshot.actuation, err = client.Actuation(ctx); err != nil {
 		return snapshot, fmt.Errorf("read actuation: %w", err)
 	}
@@ -331,6 +338,9 @@ func (u *UI) applyConfiguration(snapshot configurationSnapshot) {
 	u.keys.updating = false
 	u.setKeyMapping(&u.keys, snapshot.mapping)
 	u.setLightingSettings(&u.lighting, snapshot.lighting)
+	if snapshot.lighting.Effect == protocol.CustomStaticLightingEffect {
+		u.setCustomLighting(&u.lighting, snapshot.custom)
+	}
 	u.setActuationSettings(&u.actuation, snapshot.actuation)
 	u.setMPTStages(snapshot.mpt)
 	u.macros.actions = snapshot.macros

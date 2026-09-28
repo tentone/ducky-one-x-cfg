@@ -129,6 +129,78 @@ func TestRainbowLightingCodec(t *testing.T) {
 	}
 }
 
+func TestCustomLightingCodec(t *testing.T) {
+	step := 0
+	fake := &fakeExchange{fn: func(report []byte, expected byte) ([]byte, error) {
+		defer func() { step++ }()
+		switch step {
+		case 0:
+			want := []byte{0x66, 2, 12, 0x66, 0x0d, 0x0a}
+			if expected != 13 || !bytes.Equal(report, want) {
+				return nil, fmt.Errorf("wrong custom mode request %v", report)
+			}
+			return []byte{0x66, 1, 13, 7}, nil
+		case 1:
+			want := []byte{0x66, 2, 15, 7, 2, 0, 0x0d, 0x0a}
+			if expected != 16 || !bytes.Equal(report, want) {
+				return nil, fmt.Errorf("wrong custom data request %v", report)
+			}
+			payload := []byte{85, 4, 0, 0, 0, 2, 0, 1, 2, 3, 124, 4, 5, 6}
+			response := []byte{0x66, byte(len(payload)), 16, 7, 1, 0}
+			return append(response, payload...), nil
+		case 2:
+			want := []byte{0x66, 14, 17, 7, 1, 0, 85, 4, 0, 0, 0, 2, 0, 1, 2, 3, 124, 4, 5, 6, 0x0d, 0x0a}
+			if expected != 18 || !bytes.Equal(report, want) {
+				return nil, fmt.Errorf("wrong custom write request %v, want %v", report, want)
+			}
+			return []byte{0x66, 1, 18, 0}, nil
+		default:
+			return nil, fmt.Errorf("unexpected extra request %v", report)
+		}
+	}}
+	client := NewClient(fake)
+	settings, err := client.CustomLighting(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Brightness != 100 || len(settings.Colors) != 2 || settings.Colors[1] != (KeyColor{Key: 124, Red: 4, Green: 5, Blue: 6}) {
+		t.Fatalf("unexpected custom lighting settings: %+v", settings)
+	}
+	if err := client.SetCustomLighting(context.Background(), settings); err != nil {
+		t.Fatal(err)
+	}
+	if fake.calls != 3 {
+		t.Fatalf("got %d requests, want 3", fake.calls)
+	}
+}
+
+func TestCustomLightingWriteChunking(t *testing.T) {
+	section := 0
+	fake := &fakeExchange{fn: func(report []byte, expected byte) ([]byte, error) {
+		if expected != 18 || report[2] != 17 || report[3] != 7 || report[4] != 2 || int(report[5]) != section {
+			return nil, fmt.Errorf("unexpected custom lighting section %d report %v", section, report)
+		}
+		if section == 0 && report[1] != 55 {
+			return nil, fmt.Errorf("first chunk length = %d, want 55", report[1])
+		}
+		if section == 1 && report[1] != 31 {
+			return nil, fmt.Errorf("second chunk length = %d, want 31", report[1])
+		}
+		section++
+		return []byte{0x66, 1, 18, 0}, nil
+	}}
+	settings := CustomLightingSettings{Brightness: 75}
+	for key := 0; key < 20; key++ {
+		settings.Colors = append(settings.Colors, KeyColor{Key: byte(key), Red: byte(key), Green: 2, Blue: 3})
+	}
+	if err := NewClient(fake).SetCustomLighting(context.Background(), settings); err != nil {
+		t.Fatal(err)
+	}
+	if fake.calls != 2 || section != 2 {
+		t.Fatalf("wrote %d chunks, want 2", fake.calls)
+	}
+}
+
 func TestLightingUsesWriteOnlyTransportWhenAvailable(t *testing.T) {
 	fake := &fakeSender{}
 	client := NewClient(fake)

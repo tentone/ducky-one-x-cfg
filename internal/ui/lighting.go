@@ -27,11 +27,13 @@ type lightingControls struct {
 	preview    *canvas.Rectangle
 	keyboard   *KeyboardView
 	animator   *LightingAnimator
+	keyColors  map[int]color.NRGBA
 	colorRow   fyne.CanvasObject
 	speedRow   fyne.CanvasObject
 	brightRow  fyne.CanvasObject
 	patternRow fyne.CanvasObject
 	directRow  fyne.CanvasObject
+	paintRow   fyne.CanvasObject
 	updating   bool
 }
 
@@ -40,13 +42,23 @@ var lightingEffects = []struct {
 	code   byte
 }{
 	{"effect.static", 13}, {"effect.breathing", 3}, {"effect.cycle", 15}, {"effect.reactive", 25},
-	{"effect.ripple", 39}, {"effect.rainbow", 21}, {"effect.analog", 49}, {"effect.off", 103},
+	{"effect.ripple", 39}, {"effect.rainbow", 21}, {"effect.analog", 49},
+	{"effect.custom", protocol.CustomStaticLightingEffect}, {"effect.off", 103},
 }
 
 func (u *UI) buildLighting() lightingControls {
 	t := u.i18n.T
-	controls := lightingControls{red: 234, green: 168, blue: 42}
+	controls := lightingControls{red: 234, green: 168, blue: 42, keyColors: make(map[int]color.NRGBA)}
+	var autoApplyLighting func()
 	controls.keyboard = NewKeyboardView(func(index int) {
+		if controls.effect != nil && effectCode(controls.effect.Selected, t) == protocol.CustomStaticLightingEffect {
+			controls.keyColors[index] = color.NRGBA{R: controls.red, G: controls.green, B: controls.blue, A: 255}
+			controls.animator.SetCustomColors(controls.keyColors)
+			if autoApplyLighting != nil {
+				autoApplyLighting()
+			}
+			return
+		}
 		if controls.animator != nil {
 			controls.animator.Press(index)
 		}
@@ -78,7 +90,6 @@ func (u *UI) buildLighting() lightingControls {
 	controls.preview.SetMinSize(fyne.NewSize(56, 30))
 
 	var applyLighting func()
-	var autoApplyLighting func()
 	updateAnimation := func() {
 		if !controls.updating {
 			controls.animator.Set(lightingSettingsFromControls(&controls, t))
@@ -103,6 +114,9 @@ func (u *UI) buildLighting() lightingControls {
 			controls.red, controls.green, controls.blue = rgbaBytes(selected)
 			controls.preview.FillColor = color.NRGBA{R: controls.red, G: controls.green, B: controls.blue, A: 255}
 			controls.preview.Refresh()
+			if effectCode(controls.effect.Selected, t) == protocol.CustomStaticLightingEffect {
+				return
+			}
 			updateAnimation()
 		}, u.window)
 		picker.Advanced = true
@@ -115,24 +129,42 @@ func (u *UI) buildLighting() lightingControls {
 			if err != nil {
 				return nil, err
 			}
+			var custom protocol.CustomLightingSettings
+			if settings.Effect == protocol.CustomStaticLightingEffect {
+				custom, err = u.client.CustomLighting(ctx)
+				if err != nil {
+					return nil, err
+				}
+				settings.Brightness = custom.Brightness
+			}
 			return func() {
 				u.setLightingSettings(&controls, settings)
+				if settings.Effect == protocol.CustomStaticLightingEffect {
+					u.setCustomLighting(&controls, custom)
+				}
 				u.detail.SetText(t("status.loaded"))
 			}, nil
 		})
 	})
-	writeLighting := func(settings protocol.LightingSettings) {
+	writeLighting := func(settings protocol.LightingSettings, custom protocol.CustomLightingSettings) {
 		u.run(func(ctx context.Context) (func(), error) {
-			if err := u.client.SetLighting(ctx, settings); err != nil {
+			if settings.Effect == protocol.CustomStaticLightingEffect {
+				if err := u.client.SetCustomLighting(ctx, custom); err != nil {
+					return nil, err
+				}
+			} else if err := u.client.SetLighting(ctx, settings); err != nil {
 				return nil, err
 			}
 			return func() { u.detail.SetText(t("status.saved")) }, nil
 		})
 	}
-	applyLighting = func() { writeLighting(lightingSettingsFromControls(&controls, t)) }
+	applyLighting = func() {
+		writeLighting(lightingSettingsFromControls(&controls, t), customLightingFromControls(&controls))
+	}
 	autoApplyLighting = func() {
 		settings := lightingSettingsFromControls(&controls, t)
-		u.scheduleAutoSync("lighting", func() { writeLighting(settings) })
+		custom := customLightingFromControls(&controls)
+		u.scheduleAutoSync("lighting", func() { writeLighting(settings, custom) })
 	}
 	apply := widget.NewButtonWithIcon(t("action.apply"), theme.ConfirmIcon(), applyLighting)
 
@@ -142,13 +174,23 @@ func (u *UI) buildLighting() lightingControls {
 	controls.speedRow = lightingSettingRow(t("speed"), sliderValue(controls.speed, "%", func(float64) { updateAnimation() }))
 	controls.patternRow = lightingSettingRow(t("pattern"), container.NewGridWrap(fyne.NewSize(210, 36), controls.pattern))
 	controls.directRow = lightingSettingRow(t("direction"), container.NewGridWrap(fyne.NewSize(210, 36), controls.direction))
+	paintHint := widget.NewLabel(t("lighting.paint_hint"))
+	paintHint.Wrapping = fyne.TextWrapWord
+	clearPaint := widget.NewButtonWithIcon(t("action.clear_keys"), theme.DeleteIcon(), func() {
+		controls.keyColors = make(map[int]color.NRGBA)
+		controls.animator.SetCustomColors(controls.keyColors)
+		if autoApplyLighting != nil {
+			autoApplyLighting()
+		}
+	})
+	controls.paintRow = lightingSettingRow(t("lighting.paint"), container.NewBorder(nil, nil, nil, clearPaint, paintHint))
 	effectRow := lightingSettingRow(t("effect"), container.NewGridWrap(fyne.NewSize(210, 36), controls.effect))
 
 	description := widget.NewLabel(t("lighting.description"))
 	description.Wrapping = fyne.TextWrapWord
 	keyboardCard := widget.NewCard(t("tab.lighting"), "", controls.keyboard.CanvasObject())
 	settingsCard := widget.NewCard(t("effect"), "", container.NewVBox(
-		effectRow, controls.colorRow, controls.brightRow, controls.speedRow, controls.patternRow, controls.directRow,
+		effectRow, controls.colorRow, controls.paintRow, controls.brightRow, controls.speedRow, controls.patternRow, controls.directRow,
 	))
 	controls.root = container.NewBorder(
 		container.NewVBox(description, widget.NewSeparator()),
@@ -172,6 +214,7 @@ func (u *UI) updateLightingVisibility(controls *lightingControls) {
 	setVisible(controls.speedRow, effect == 3 || effect == 15 || effect == 25 || effect == 39 || effect == 21)
 	setVisible(controls.patternRow, effect == 21)
 	setVisible(controls.directRow, effect == 21)
+	setVisible(controls.paintRow, effect == protocol.CustomStaticLightingEffect)
 }
 
 func setVisible(object fyne.CanvasObject, visible bool) {
@@ -209,6 +252,29 @@ func lightingSettingsFromControls(controls *lightingControls, t func(string) str
 		settings.ColorMode = rainbowDirectionCode(controls.direction.Selected, t)
 	}
 	return settings
+}
+
+func customLightingFromControls(controls *lightingControls) protocol.CustomLightingSettings {
+	settings := protocol.CustomLightingSettings{Brightness: int(controls.brightness.Value)}
+	settings.Colors = make([]protocol.KeyColor, 0, len(controls.keyColors))
+	for index, keyColor := range controls.keyColors {
+		settings.Colors = append(settings.Colors, protocol.KeyColor{
+			Key: byte(index), Red: keyColor.R, Green: keyColor.G, Blue: keyColor.B,
+		})
+	}
+	return settings
+}
+
+func (u *UI) setCustomLighting(controls *lightingControls, settings protocol.CustomLightingSettings) {
+	u.withoutAutoSync(func() {
+		controls.keyColors = make(map[int]color.NRGBA, len(settings.Colors))
+		for _, keyColor := range settings.Colors {
+			controls.keyColors[int(keyColor.Key)] = color.NRGBA{
+				R: keyColor.Red, G: keyColor.Green, B: keyColor.Blue, A: 255,
+			}
+		}
+		controls.animator.SetCustomColors(controls.keyColors)
+	})
 }
 
 func (u *UI) setLightingSettings(controls *lightingControls, settings protocol.LightingSettings) {

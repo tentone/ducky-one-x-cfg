@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 )
 
 func (c *Client) Lighting(ctx context.Context) (LightingSettings, error) {
@@ -32,6 +33,110 @@ func (c *Client) SetLighting(ctx context.Context, settings LightingSettings) err
 		settings.Effect, encodeSpeed(settings.Speed), settings.Red, settings.Green, settings.Blue,
 		encodeBrightness(settings.Brightness), settings.Variant, packetStart,
 	)
+}
+
+func (c *Client) CustomLighting(ctx context.Context) (CustomLightingSettings, error) {
+	modeResponse, err := c.request(ctx, 13, 2, 12, packetStart)
+	if err != nil {
+		return CustomLightingSettings{}, err
+	}
+	if len(modeResponse) < 4 {
+		return CustomLightingSettings{}, errors.New("short custom lighting mode response")
+	}
+	const customStaticMode = byte(7)
+	if modeResponse[3] != customStaticMode {
+		return CustomLightingSettings{}, fmt.Errorf("custom lighting mode %d is not per-key static mode", modeResponse[3])
+	}
+
+	raw := make([]byte, 0, MaxMatrixKeys*4+6)
+	for section := 0; section < 16; section++ {
+		response, err := c.request(ctx, 16, 2, 15, customStaticMode, 2, byte(section))
+		if err != nil {
+			return CustomLightingSettings{}, fmt.Errorf("read custom lighting section %d: %w", section, err)
+		}
+		if len(response) < 6 {
+			return CustomLightingSettings{}, fmt.Errorf("short custom lighting section %d", section)
+		}
+		length := int(response[1])
+		if len(response) < 6+length {
+			return CustomLightingSettings{}, fmt.Errorf("short custom lighting payload in section %d", section)
+		}
+		raw = append(raw, response[6:6+length]...)
+		total := int(response[4])
+		current := int(response[5])
+		if total <= 0 || current+1 >= total {
+			break
+		}
+	}
+	if len(raw) < 6 || raw[0] != 85 {
+		return CustomLightingSettings{}, errors.New("invalid custom lighting payload")
+	}
+	count := int(raw[5])
+	if count > MaxMatrixKeys || len(raw) < 6+count*4 {
+		return CustomLightingSettings{}, errors.New("short custom lighting color data")
+	}
+	settings := CustomLightingSettings{Brightness: decodeCustomBrightness(raw[1]), Colors: make([]KeyColor, 0, count)}
+	for i := 0; i < count; i++ {
+		offset := 6 + i*4
+		if int(raw[offset]) >= MaxMatrixKeys {
+			continue
+		}
+		settings.Colors = append(settings.Colors, KeyColor{
+			Key: raw[offset], Red: raw[offset+1], Green: raw[offset+2], Blue: raw[offset+3],
+		})
+	}
+	return settings, nil
+}
+
+func (c *Client) SetCustomLighting(ctx context.Context, settings CustomLightingSettings) error {
+	colorsByKey := make(map[byte]KeyColor, len(settings.Colors))
+	for _, keyColor := range settings.Colors {
+		if int(keyColor.Key) >= MaxMatrixKeys {
+			return fmt.Errorf("custom lighting key %d is outside the keyboard matrix", keyColor.Key)
+		}
+		colorsByKey[keyColor.Key] = keyColor
+	}
+	keys := make([]int, 0, len(colorsByKey))
+	for key := range colorsByKey {
+		keys = append(keys, int(key))
+	}
+	sort.Ints(keys)
+	raw := make([]byte, 0, len(keys)*4)
+	for _, key := range keys {
+		keyColor := colorsByKey[byte(key)]
+		raw = append(raw, keyColor.Key, keyColor.Red, keyColor.Green, keyColor.Blue)
+	}
+
+	const (
+		customStaticMode = byte(7)
+		firstDataBytes   = 49
+		continuationSize = 55
+	)
+	totalBytes := len(raw) + 6
+	totalSections := (totalBytes + continuationSize - 1) / continuationSize
+	if totalSections < 1 {
+		totalSections = 1
+	}
+	offset := 0
+	for section := 0; section < totalSections; section++ {
+		var data []byte
+		if section == 0 {
+			end := min(len(raw), firstDataBytes)
+			data = []byte{85, encodeCustomBrightness(settings.Brightness), 0, 0, 0, byte(len(keys))}
+			data = append(data, raw[:end]...)
+			offset = end
+		} else {
+			end := min(len(raw), offset+continuationSize)
+			data = append(data, raw[offset:end]...)
+			offset = end
+		}
+		packetData := []byte{customStaticMode, byte(totalSections), byte(section)}
+		packetData = append(packetData, data...)
+		if _, err := c.request(ctx, 18, byte(len(data)), 17, packetData...); err != nil {
+			return fmt.Errorf("write custom lighting section %d: %w", section, err)
+		}
+	}
+	return nil
 }
 
 func (c *Client) Actuation(ctx context.Context) ([]ActuationSetting, error) {
