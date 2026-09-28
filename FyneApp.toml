@@ -1,0 +1,8 @@
+[Details]
+Name = "Ducky One X Configurator"
+ID = "io.ducky.one-x.configurator"
+Version = "0.1.0"
+Build = 1
+
+[Development]
+HelperText = "A local, offline configurator for the Ducky One X keyboard."

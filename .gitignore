@@ -1,2 +1,5 @@
 .venv/
 webapp_snapshot/
+dist/
+*.exe
+*.app/

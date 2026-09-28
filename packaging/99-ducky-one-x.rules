@@ -1,0 +1,2 @@
+# Ducky One X vendor HID configuration interface
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3233", MODE="0660", TAG+="uaccess"
