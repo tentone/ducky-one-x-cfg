@@ -5,11 +5,11 @@ A native, offline desktop configurator for the Ducky One X keyboard. It is writt
 ## Features
 
 - Windows, Linux, and macOS desktop UI
-- Connect/disconnect and device/firmware identification
-- Switch between both onboard memory profiles
-- Configure the base and Fn key layers
-- Static and animated lighting effects, color, brightness, speed, and variant
-- Per-key actuation and rapid-trigger settings across all 126 matrix positions
+- Automatic USB discovery, connection, firmware identification, and configuration loading
+- Switch between both onboard memory profiles and immediately load the selected profile
+- Visual full-size keyboard with click-to-edit Base and Fn key assignments
+- Animated on-keyboard lighting previews for static, breathing, cycle, reactive, ripple, rainbow, analog, and off effects
+- Per-key actuation overlays, click feedback, and rapid-trigger settings across all 126 matrix positions
 - Four-stage multi-point-trigger presets (MPT1–MPT14)
 - Fourteen onboard macro slots with press, release, click, delay, and text actions
 - System, light, and dark themes

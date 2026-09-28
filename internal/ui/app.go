@@ -35,6 +35,8 @@ type UI struct {
 	detail        *widget.Label
 	busy          bool
 	updating      bool
+	autoConnect   bool
+	done          chan struct{}
 
 	keys      keyControls
 	lighting  lightingControls
@@ -51,9 +53,13 @@ func Run() error {
 	application := app.NewWithID("io.ducky.one-x.configurator")
 	u := &UI{
 		app: application, window: application.NewWindow("Ducky One X Configurator"),
-		i18n: i18n.New(), manager: manager,
+		i18n: i18n.New(), manager: manager, autoConnect: true, done: make(chan struct{}),
 	}
 	u.window.SetOnClosed(func() {
+		close(u.done)
+		if u.lighting.animator != nil {
+			u.lighting.animator.Stop()
+		}
 		if err := manager.Close(); err != nil {
 			log.Printf("close HID manager: %v", err)
 		}
@@ -63,6 +69,7 @@ func Run() error {
 	u.window.Resize(fyne.NewSize(1120, 760))
 	u.window.SetContent(u.content())
 	u.refreshDevices()
+	u.startAutoDiscovery()
 	u.window.ShowAndRun()
 	return nil
 }
@@ -94,7 +101,10 @@ func (u *UI) content() fyne.CanvasObject {
 	subtitle := widget.NewLabel(t("app.subtitle"))
 	subtitle.Importance = widget.LowImportance
 
-	refresh := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), u.refreshDevices)
+	refresh := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+		u.autoConnect = true
+		u.refreshDevices()
+	})
 	refresh.Importance = widget.LowImportance
 	themeSelect := widget.NewSelect(
 		[]string{t("theme.system"), t("theme.light"), t("theme.dark")},
@@ -151,6 +161,9 @@ func (u *UI) refreshDevices() {
 	if len(options) > 0 {
 		u.deviceSelect.SetSelected(options[0])
 		u.detail.SetText(fmt.Sprintf(u.i18n.T("connection.found"), len(options)))
+		if u.autoConnect {
+			u.connectSelected()
+		}
 	} else {
 		u.deviceSelect.ClearSelected()
 		u.detail.SetText(u.i18n.T("connection.wired"))
@@ -159,6 +172,7 @@ func (u *UI) refreshDevices() {
 
 func (u *UI) toggleConnection() {
 	if u.client != nil {
+		u.autoConnect = false
 		if err := u.manager.Disconnect(); err != nil {
 			u.showError(err)
 		}
@@ -171,6 +185,14 @@ func (u *UI) toggleConnection() {
 		u.detail.SetText(u.i18n.T("connection.wired"))
 		return
 	}
+	u.autoConnect = true
+	u.refreshDevices()
+}
+
+func (u *UI) connectSelected() {
+	if u.client != nil || u.busy {
+		return
+	}
 	selected := u.deviceSelect.Selected
 	index := -1
 	for i, descriptor := range u.devices {
@@ -180,29 +202,37 @@ func (u *UI) toggleConnection() {
 		}
 	}
 	if index < 0 {
-		u.refreshDevices()
-		if len(u.devices) == 0 {
-			dialog.ShowInformation(u.i18n.T("action.connect"), u.i18n.T("connection.wired"), u.window)
-			return
-		}
-		index = 0
+		dialog.ShowInformation(u.i18n.T("action.connect"), u.i18n.T("connection.wired"), u.window)
+		return
 	}
 	descriptor := u.devices[index]
-	u.setBusy(true, fmt.Sprintf(u.i18n.T("connection.opening"), descriptor.DisplayName()))
+	u.detail.SetText(fmt.Sprintf(u.i18n.T("connection.opening"), descriptor.DisplayName()))
+	u.setBusy(true, u.i18n.T("connection.loading"))
 	go func() {
 		session, err := u.manager.Connect(descriptor.Path)
 		if err != nil {
-			fyne.Do(func() { u.finish(nil, err) })
+			fyne.Do(func() {
+				u.autoConnect = false
+				u.finish(nil, err)
+			})
 			return
 		}
 		client := protocol.NewClient(session)
-		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 		metadata, metadataErr := client.Metadata(ctx)
-		profile, profileErr := client.ActiveProfile(ctx)
+		var profile int
+		var profileErr error
+		var configuration configurationSnapshot
+		var configurationErr error
+		if metadataErr == nil {
+			profile, profileErr = client.ActiveProfile(ctx)
+			configuration, configurationErr = u.readConfiguration(ctx, client)
+		}
 		fyne.Do(func() {
 			if metadataErr != nil {
 				_ = u.manager.Disconnect()
+				u.autoConnect = false
 				u.finish(nil, metadataErr)
 				return
 			}
@@ -217,10 +247,113 @@ func (u *UI) toggleConnection() {
 			u.updating = false
 			u.connectButton.SetText(u.i18n.T("action.disconnect"))
 			u.connectButton.SetIcon(theme.MediaStopIcon())
-			u.status.SetText(u.i18n.T("connection.ready"))
+			if configurationErr == nil {
+				u.applyConfiguration(configuration)
+			}
 			u.detail.SetText(fmt.Sprintf(u.i18n.T("device.summary"), descriptor.DisplayName(), metadata.Firmware()))
 			u.finish(nil, nil)
+			if profileErr != nil {
+				u.showError(profileErr)
+			} else if configurationErr != nil {
+				u.showError(configurationErr)
+			}
 		})
+	}()
+}
+
+type configurationSnapshot struct {
+	layer     int
+	mapping   []protocol.Assignment
+	lighting  protocol.LightingSettings
+	actuation []protocol.ActuationSetting
+	mpt       []protocol.MPTStage
+	macros    []protocol.MacroAction
+}
+
+func (u *UI) readConfiguration(ctx context.Context, client *protocol.Client) (configurationSnapshot, error) {
+	var snapshot configurationSnapshot
+	var err error
+	if snapshot.layer, err = client.ActiveLayer(ctx); err != nil {
+		return snapshot, fmt.Errorf("read active layer: %w", err)
+	}
+	if snapshot.layer < 0 || snapshot.layer > 1 {
+		snapshot.layer = 0
+	}
+	if err = client.SetLayer(ctx, snapshot.layer); err != nil {
+		return snapshot, fmt.Errorf("select active layer: %w", err)
+	}
+	if snapshot.mapping, err = client.KeyMap(ctx, snapshot.layer); err != nil {
+		return snapshot, fmt.Errorf("read key settings: %w", err)
+	}
+	if snapshot.lighting, err = client.Lighting(ctx); err != nil {
+		return snapshot, fmt.Errorf("read lighting: %w", err)
+	}
+	if snapshot.actuation, err = client.Actuation(ctx); err != nil {
+		return snapshot, fmt.Errorf("read actuation: %w", err)
+	}
+	if snapshot.mpt, err = client.MPT(ctx, 0); err != nil {
+		return snapshot, fmt.Errorf("read MPT1: %w", err)
+	}
+	if snapshot.macros, err = client.Macro(ctx, 1); err != nil {
+		return snapshot, fmt.Errorf("read macro M1: %w", err)
+	}
+	return snapshot, nil
+}
+
+func (u *UI) applyConfiguration(snapshot configurationSnapshot) {
+	u.keys.updating = true
+	if snapshot.layer == 1 {
+		u.keys.layer.SetSelected(u.i18n.T("layer.fn"))
+	} else {
+		u.keys.layer.SetSelected(u.i18n.T("layer.base"))
+	}
+	u.keys.updating = false
+	u.setKeyMapping(&u.keys, snapshot.mapping)
+	u.setLightingSettings(&u.lighting, snapshot.lighting)
+	u.setActuationSettings(&u.actuation, snapshot.actuation)
+	u.setMPTStages(snapshot.mpt)
+	u.macros.actions = snapshot.macros
+	u.macros.selected = -1
+	u.macros.list.UnselectAll()
+	u.macros.list.Refresh()
+}
+
+func (u *UI) setMPTStages(stages []protocol.MPTStage) {
+	t := u.i18n.T
+	for i, value := range stages {
+		if i >= len(u.mpt.stages) {
+			break
+		}
+		if value.PressMM > 0 {
+			u.mpt.stages[i].press.SetValue(value.PressMM)
+		}
+		if value.ReleaseMM > 0 {
+			u.mpt.stages[i].release.SetValue(value.ReleaseMM)
+		}
+		if value.Output == 0 {
+			u.mpt.stages[i].output.SetSelected(t("output.disabled"))
+		} else {
+			u.mpt.stages[i].output.SetSelected(protocol.KeyName(value.Output))
+		}
+	}
+}
+
+func (u *UI) startAutoDiscovery() {
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-u.done:
+				return
+			case <-ticker.C:
+				fyne.Do(func() {
+					if u.autoConnect && u.client == nil && !u.busy {
+						u.refreshDevices()
+					}
+				})
+			}
+		}
 	}()
 }
 
@@ -236,8 +369,12 @@ func (u *UI) changeProfile(value string) {
 		if err := u.client.SetProfile(ctx, profile); err != nil {
 			return nil, err
 		}
+		configuration, err := u.readConfiguration(ctx, u.client)
+		if err != nil {
+			return nil, err
+		}
 		return func() {
-			u.clearLoadedState()
+			u.applyConfiguration(configuration)
 			u.detail.SetText(u.i18n.T("status.profile"))
 		}, nil
 	})
@@ -246,8 +383,10 @@ func (u *UI) changeProfile(value string) {
 func (u *UI) clearLoadedState() {
 	u.keys.mapping = nil
 	u.keys.current.SetText("—")
+	u.updateKeyKeyboard(&u.keys)
 	u.actuation.settings = nil
 	u.actuation.mode.SetText("—")
+	u.updateActuationKeyboard(&u.actuation)
 	u.macros.actions = nil
 	u.macros.list.Refresh()
 }
@@ -262,7 +401,7 @@ func (u *UI) run(work func(context.Context) (func(), error)) {
 	}
 	u.setBusy(true, u.i18n.T("connection.working"))
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 		apply, err := work(ctx)
 		fyne.Do(func() { u.finish(apply, err) })
@@ -331,6 +470,8 @@ func (u *UI) changeTheme(value string) {
 		u.app.Settings().SetTheme(theme.DefaultTheme())
 	}
 	u.app.Preferences().SetString(preferenceTheme, setting)
+	u.updateKeyKeyboard(&u.keys)
+	u.updateActuationKeyboard(&u.actuation)
 }
 
 func (u *UI) applySavedTheme() {

@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"image/color"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -19,6 +20,7 @@ type actuationControls struct {
 	release   *widget.Slider
 	rapid     *widget.Check
 	mode      *widget.Label
+	keyboard  *KeyboardView
 	settings  []protocol.ActuationSetting
 	updating  bool
 	modeMPT   string
@@ -33,6 +35,11 @@ func (u *UI) buildActuation() actuationControls {
 	}
 	controls.key = widget.NewSelect(protocol.MatrixKeyOptions(), nil)
 	controls.key.SetSelected(protocol.MatrixKeyOptions()[0])
+	controls.keyboard = NewKeyboardView(func(index int) {
+		controls.key.SetSelected(matrixOption(index))
+		controls.keyboard.Select(index)
+		showActuationSelection(&controls)
+	})
 	controls.all = widget.NewCheck(t("selection.all"), func(checked bool) {
 		if checked {
 			controls.key.Disable()
@@ -48,7 +55,12 @@ func (u *UI) buildActuation() actuationControls {
 	controls.release.SetValue(1.0)
 	controls.rapid = widget.NewCheck(t("rapid.trigger"), nil)
 	controls.mode = widget.NewLabel("—")
-	controls.key.OnChanged = func(string) { showActuationSelection(&controls) }
+	controls.key.OnChanged = func(value string) {
+		if index, ok := parseMatrixIndex(value); ok {
+			controls.keyboard.Select(index)
+		}
+		showActuationSelection(&controls)
+	}
 
 	load := widget.NewButtonWithIcon(t("action.load"), theme.DownloadIcon(), func() {
 		u.run(func(ctx context.Context) (func(), error) {
@@ -57,8 +69,7 @@ func (u *UI) buildActuation() actuationControls {
 				return nil, err
 			}
 			return func() {
-				controls.settings = settings
-				showActuationSelection(&controls)
+				u.setActuationSettings(&controls, settings)
 				u.detail.SetText(t("status.loaded"))
 			}, nil
 		})
@@ -83,7 +94,7 @@ func (u *UI) buildActuation() actuationControls {
 					updated[i] = setting
 				}
 				return func() {
-					controls.settings = updated
+					u.setActuationSettings(&controls, updated)
 					u.detail.SetText(t("status.saved"))
 				}, nil
 			}
@@ -100,8 +111,7 @@ func (u *UI) buildActuation() actuationControls {
 				return nil, err
 			}
 			return func() {
-				controls.settings = settings
-				showActuationSelection(&controls)
+				u.setActuationSettings(&controls, settings)
 				u.detail.SetText(t("status.saved"))
 			}, nil
 		})
@@ -117,8 +127,7 @@ func (u *UI) buildActuation() actuationControls {
 					return nil, err
 				}
 				return func() {
-					controls.settings = settings
-					showActuationSelection(&controls)
+					u.setActuationSettings(&controls, settings)
 					u.detail.SetText(t("status.reset"))
 				}, nil
 			})
@@ -136,12 +145,46 @@ func (u *UI) buildActuation() actuationControls {
 	)
 	description := widget.NewLabel(t("actuation.description"))
 	description.Wrapping = fyne.TextWrapWord
+	keyboardCard := widget.NewCard(t("tab.actuation"), "", controls.keyboard.CanvasObject())
+	editorCard := widget.NewCard(t("current"), "0.1–3.5 mm", form)
 	controls.root = container.NewBorder(
 		container.NewVBox(description, widget.NewSeparator()),
 		container.NewHBox(load, apply, reset), nil, nil,
-		container.NewPadded(widget.NewCard(t("tab.actuation"), "0.1–3.5 mm", form)),
+		container.NewVScroll(container.NewPadded(container.NewVBox(keyboardCard, editorCard))),
 	)
 	return controls
+}
+
+func (u *UI) setActuationSettings(controls *actuationControls, settings []protocol.ActuationSetting) {
+	controls.settings = settings
+	u.updateActuationKeyboard(controls)
+	showActuationSelection(controls)
+}
+
+func (u *UI) updateActuationKeyboard(controls *actuationControls) {
+	controls.keyboard.ForEach(func(index int, key *keyboardKey) {
+		if index >= len(controls.settings) {
+			key.SetOverlay("—")
+			key.SetColor(theme.InputBackgroundColor())
+			return
+		}
+		setting := controls.settings[index]
+		key.SetOverlay(formatFloat(setting.ActuationMM))
+		if setting.ControlledByMPT() {
+			key.SetColor(color.NRGBA{R: 131, G: 73, B: 163, A: 255})
+			return
+		}
+		amount := (setting.ActuationMM - 0.1) / 3.4
+		if amount < 0 {
+			amount = 0
+		}
+		if amount > 1 {
+			amount = 1
+		}
+		near := color.NRGBA{R: 41, G: 145, B: 101, A: 255}
+		far := color.NRGBA{R: 210, G: 115, B: 52, A: 255}
+		key.SetColor(blendColor(near, far, amount))
+	})
 }
 
 func millimetreSlider(slider *widget.Slider) fyne.CanvasObject {
