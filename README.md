@@ -6,6 +6,7 @@ A native, offline desktop configurator for the Ducky One X keyboard. It is writt
 
 - Windows, Linux, and macOS desktop UI
 - Automatic USB discovery, connection, firmware identification, and configuration loading
+- Auto Sync enabled by default, with debounced live updates for lighting, actuation, MPT presets, and macros
 - Switch between both onboard memory profiles and immediately load the selected profile
 - Visual full-size keyboard with click-to-edit Base and Fn key assignments
 - Interactive lighting previews driven by physical key presses: single-key reactive pulses, press-centered ripple, three directional rainbow patterns, and a full-key analog light bar that moves from bottom to top

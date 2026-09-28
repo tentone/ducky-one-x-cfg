@@ -74,16 +74,7 @@ func (u *UI) buildActuation() actuationControls {
 			}, nil
 		})
 	})
-	apply := widget.NewButtonWithIcon(t("action.apply"), theme.ConfirmIcon(), func() {
-		setting := protocol.ActuationSetting{
-			ActuationMM: controls.point.Value, ReleaseMM: controls.release.Value,
-		}
-		if controls.rapid.Checked {
-			setting.Mode = 1
-		}
-		all := controls.all.Checked
-		index, _ := parseMatrixIndex(controls.key.Selected)
-		existing := append([]protocol.ActuationSetting(nil), controls.settings...)
+	writeActuation := func(setting protocol.ActuationSetting, all bool, index int) {
 		u.run(func(ctx context.Context) (func(), error) {
 			if all {
 				if err := u.client.SetAllActuation(ctx, setting); err != nil {
@@ -98,13 +89,9 @@ func (u *UI) buildActuation() actuationControls {
 					u.detail.SetText(t("status.saved"))
 				}, nil
 			}
-			settings := existing
-			if len(settings) != protocol.MaxMatrixKeys {
-				var err error
-				settings, err = u.client.Actuation(ctx)
-				if err != nil {
-					return nil, err
-				}
+			settings, err := u.client.Actuation(ctx)
+			if err != nil {
+				return nil, err
 			}
 			settings[index] = setting
 			if err := u.client.SetActuation(ctx, settings); err != nil {
@@ -115,7 +102,33 @@ func (u *UI) buildActuation() actuationControls {
 				u.detail.SetText(t("status.saved"))
 			}, nil
 		})
-	})
+	}
+	actuationSelection := func() (protocol.ActuationSetting, bool, int) {
+		setting := protocol.ActuationSetting{
+			ActuationMM: controls.point.Value, ReleaseMM: controls.release.Value,
+		}
+		if controls.rapid.Checked {
+			setting.Mode = 1
+		}
+		index, _ := parseMatrixIndex(controls.key.Selected)
+		return setting, controls.all.Checked, index
+	}
+	applyActuation := func() {
+		setting, all, index := actuationSelection()
+		writeActuation(setting, all, index)
+	}
+	apply := widget.NewButtonWithIcon(t("action.apply"), theme.ConfirmIcon(), applyActuation)
+	autoApply := func() {
+		if !controls.updating {
+			setting, all, index := actuationSelection()
+			feature := fmt.Sprintf("actuation:%d", index)
+			if all {
+				feature = "actuation:all"
+			}
+			u.scheduleAutoSync(feature, func() { writeActuation(setting, all, index) })
+		}
+	}
+	controls.rapid.OnChanged = func(bool) { autoApply() }
 	reset := widget.NewButtonWithIcon(t("action.reset"), theme.DeleteIcon(), func() {
 		u.confirmReset(t("tab.actuation"), func() {
 			u.run(func(ctx context.Context) (func(), error) {
@@ -139,8 +152,8 @@ func (u *UI) buildActuation() actuationControls {
 		widget.NewFormItem(t("key"), controls.key),
 		widget.NewFormItem("", controls.all),
 		widget.NewFormItem(t("current"), controls.mode),
-		widget.NewFormItem(t("actuation.point"), millimetreSlider(controls.point)),
-		widget.NewFormItem(t("release.distance"), millimetreSlider(controls.release)),
+		widget.NewFormItem(t("actuation.point"), millimetreSlider(controls.point, func(float64) { autoApply() })),
+		widget.NewFormItem(t("release.distance"), millimetreSlider(controls.release, func(float64) { autoApply() })),
 		widget.NewFormItem("", controls.rapid),
 	)
 	description := widget.NewLabel(t("actuation.description"))
@@ -156,9 +169,11 @@ func (u *UI) buildActuation() actuationControls {
 }
 
 func (u *UI) setActuationSettings(controls *actuationControls, settings []protocol.ActuationSetting) {
-	controls.settings = settings
-	u.updateActuationKeyboard(controls)
-	showActuationSelection(controls)
+	u.withoutAutoSync(func() {
+		controls.settings = settings
+		u.updateActuationKeyboard(controls)
+		showActuationSelection(controls)
+	})
 }
 
 func (u *UI) updateActuationKeyboard(controls *actuationControls) {
@@ -187,10 +202,15 @@ func (u *UI) updateActuationKeyboard(controls *actuationControls) {
 	})
 }
 
-func millimetreSlider(slider *widget.Slider) fyne.CanvasObject {
+func millimetreSlider(slider *widget.Slider, changed ...func(float64)) fyne.CanvasObject {
 	value := widget.NewLabel(formatMM(slider.Value))
 	value.Alignment = fyne.TextAlignTrailing
-	slider.OnChanged = func(number float64) { value.SetText(formatMM(number)) }
+	slider.OnChanged = func(number float64) {
+		value.SetText(formatMM(number))
+		for _, callback := range changed {
+			callback(number)
+		}
+	}
 	return container.NewBorder(nil, nil, nil, container.NewGridWrap(fyne.NewSize(64, 32), value), slider)
 }
 

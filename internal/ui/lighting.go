@@ -77,10 +77,15 @@ func (u *UI) buildLighting() lightingControls {
 	controls.preview = canvas.NewRectangle(color.NRGBA{R: controls.red, G: controls.green, B: controls.blue, A: 255})
 	controls.preview.SetMinSize(fyne.NewSize(56, 30))
 
+	var applyLighting func()
+	var autoApplyLighting func()
 	updateAnimation := func() {
 		if !controls.updating {
 			controls.animator.Set(lightingSettingsFromControls(&controls, t))
 			u.window.Canvas().Unfocus()
+			if autoApplyLighting != nil {
+				autoApplyLighting()
+			}
 		}
 	}
 	controls.effect.OnChanged = func(string) {
@@ -116,15 +121,20 @@ func (u *UI) buildLighting() lightingControls {
 			}, nil
 		})
 	})
-	apply := widget.NewButtonWithIcon(t("action.apply"), theme.ConfirmIcon(), func() {
-		settings := lightingSettingsFromControls(&controls, t)
+	writeLighting := func(settings protocol.LightingSettings) {
 		u.run(func(ctx context.Context) (func(), error) {
 			if err := u.client.SetLighting(ctx, settings); err != nil {
 				return nil, err
 			}
 			return func() { u.detail.SetText(t("status.saved")) }, nil
 		})
-	})
+	}
+	applyLighting = func() { writeLighting(lightingSettingsFromControls(&controls, t)) }
+	autoApplyLighting = func() {
+		settings := lightingSettingsFromControls(&controls, t)
+		u.scheduleAutoSync("lighting", func() { writeLighting(settings) })
+	}
+	apply := widget.NewButtonWithIcon(t("action.apply"), theme.ConfirmIcon(), applyLighting)
 
 	colorControl := container.NewBorder(nil, nil, controls.preview, nil, chooseColor)
 	controls.colorRow = lightingSettingRow(t("color"), colorControl)
@@ -202,19 +212,21 @@ func lightingSettingsFromControls(controls *lightingControls, t func(string) str
 }
 
 func (u *UI) setLightingSettings(controls *lightingControls, settings protocol.LightingSettings) {
-	controls.updating = true
-	controls.effect.SetSelected(effectName(settings.Effect, u.i18n.T))
-	if settings.Speed < 10 {
-		settings.Speed = 10
-	}
-	controls.speed.SetValue(float64(settings.Speed))
-	controls.brightness.SetValue(float64(settings.Brightness))
-	controls.pattern.SetSelected(rainbowPatternName(settings.Variant, u.i18n.T))
-	controls.direction.SetSelected(rainbowDirectionName(settings.ColorMode, u.i18n.T))
-	controls.red, controls.green, controls.blue = settings.Red, settings.Green, settings.Blue
-	controls.preview.FillColor = color.NRGBA{R: settings.Red, G: settings.Green, B: settings.Blue, A: 255}
-	controls.preview.Refresh()
-	controls.updating = false
+	u.withoutAutoSync(func() {
+		controls.updating = true
+		controls.effect.SetSelected(effectName(settings.Effect, u.i18n.T))
+		if settings.Speed < 10 {
+			settings.Speed = 10
+		}
+		controls.speed.SetValue(float64(settings.Speed))
+		controls.brightness.SetValue(float64(settings.Brightness))
+		controls.pattern.SetSelected(rainbowPatternName(settings.Variant, u.i18n.T))
+		controls.direction.SetSelected(rainbowDirectionName(settings.ColorMode, u.i18n.T))
+		controls.red, controls.green, controls.blue = settings.Red, settings.Green, settings.Blue
+		controls.preview.FillColor = color.NRGBA{R: settings.Red, G: settings.Green, B: settings.Blue, A: 255}
+		controls.preview.Refresh()
+		controls.updating = false
+	})
 	u.updateLightingVisibility(controls)
 	controls.animator.Set(lightingSettingsFromControls(controls, u.i18n.T))
 }

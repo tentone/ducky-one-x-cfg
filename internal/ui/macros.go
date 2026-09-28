@@ -63,6 +63,7 @@ func (u *UI) buildMacros() macroControls {
 	controls.list.OnSelected = func(id widget.ListItemID) { controls.selected = id }
 	controls.list.OnUnselected = func(widget.ListItemID) { controls.selected = -1 }
 
+	var autoApply func()
 	add := widget.NewButtonWithIcon(t("action.add"), theme.ContentAddIcon(), func() {
 		action, ok := macroActionFromInputs(&controls, t)
 		if !ok {
@@ -73,6 +74,9 @@ func (u *UI) buildMacros() macroControls {
 		controls.list.Refresh()
 		controls.list.ScrollToBottom()
 		controls.value.SetText("")
+		if autoApply != nil {
+			autoApply()
+		}
 	})
 	remove := widget.NewButtonWithIcon(t("action.remove"), theme.ContentRemoveIcon(), func() {
 		if controls.selected < 0 || controls.selected >= len(controls.actions) {
@@ -83,6 +87,9 @@ func (u *UI) buildMacros() macroControls {
 		controls.selected = -1
 		controls.list.UnselectAll()
 		controls.list.Refresh()
+		if autoApply != nil {
+			autoApply()
+		}
 	})
 
 	load := widget.NewButtonWithIcon(t("action.load"), theme.DownloadIcon(), func() {
@@ -100,16 +107,25 @@ func (u *UI) buildMacros() macroControls {
 			}, nil
 		})
 	})
-	save := widget.NewButtonWithIcon(t("action.apply"), theme.ConfirmIcon(), func() {
-		slot := macroSlot(controls.slot.Selected)
-		actions := append([]protocol.MacroAction(nil), controls.actions...)
+	writeMacro := func(slot int, actions []protocol.MacroAction) {
 		u.run(func(ctx context.Context) (func(), error) {
 			if err := u.client.SetMacro(ctx, slot, actions); err != nil {
 				return nil, err
 			}
 			return func() { u.detail.SetText(t("status.saved")) }, nil
 		})
-	})
+	}
+	applyMacro := func() {
+		slot := macroSlot(controls.slot.Selected)
+		actions := append([]protocol.MacroAction(nil), controls.actions...)
+		writeMacro(slot, actions)
+	}
+	save := widget.NewButtonWithIcon(t("action.apply"), theme.ConfirmIcon(), applyMacro)
+	autoApply = func() {
+		slot := macroSlot(controls.slot.Selected)
+		actions := append([]protocol.MacroAction(nil), controls.actions...)
+		u.scheduleAutoSync(fmt.Sprintf("macro:%d", slot), func() { writeMacro(slot, actions) })
+	}
 	clear := widget.NewButtonWithIcon(t("action.reset"), theme.DeleteIcon(), func() {
 		slot := macroSlot(controls.slot.Selected)
 		u.confirmReset(controls.slot.Selected, func() {

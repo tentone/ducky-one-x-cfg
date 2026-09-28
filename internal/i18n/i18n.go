@@ -76,6 +76,7 @@ var english = map[string]string{
 	"device":                  "Device",
 	"firmware":                "Firmware",
 	"profile":                 "Memory profile",
+	"auto_sync":               "Auto sync",
 	"profile.1":               "Profile 1",
 	"profile.2":               "Profile 2",
 	"theme":                   "Theme",

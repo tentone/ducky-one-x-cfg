@@ -18,7 +18,10 @@ import (
 	"github.com/joseferrao/ducky-drv/internal/protocol"
 )
 
-const preferenceTheme = "appearance.theme"
+const (
+	preferenceTheme    = "appearance.theme"
+	preferenceAutoSync = "keyboard.auto_sync"
+)
 
 type UI struct {
 	app     fyne.App
@@ -31,6 +34,7 @@ type UI struct {
 	deviceSelect  *widget.Select
 	connectButton *widget.Button
 	profileSelect *widget.Select
+	autoSync      *widget.Check
 	status        *widget.Label
 	detail        *widget.Label
 	busy          bool
@@ -43,6 +47,8 @@ type UI struct {
 	actuation actuationControls
 	mpt       mptControls
 	macros    macroControls
+
+	autoSyncState autoSyncState
 }
 
 func Run() error {
@@ -56,6 +62,7 @@ func Run() error {
 		i18n: i18n.New(), manager: manager, autoConnect: true, done: make(chan struct{}),
 	}
 	u.window.SetOnClosed(func() {
+		u.cancelAutoSync()
 		close(u.done)
 		if u.lighting.animator != nil {
 			u.lighting.animator.Stop()
@@ -112,8 +119,16 @@ func (u *UI) content() fyne.CanvasObject {
 	themeSelect.SetSelected(u.themeLabel(u.app.Preferences().StringWithFallback(preferenceTheme, "system")))
 	language := widget.NewSelect([]string{"English"}, func(string) {})
 	language.SetSelected("English")
+	u.autoSync = widget.NewCheck(t("auto_sync"), func(enabled bool) {
+		u.app.Preferences().SetBool(preferenceAutoSync, enabled)
+		if !enabled {
+			u.cancelAutoSync()
+		}
+	})
+	u.autoSync.SetChecked(u.app.Preferences().BoolWithFallback(preferenceAutoSync, true))
 
 	preferences := container.NewHBox(
+		u.autoSync,
 		widget.NewLabel(t("profile")), compactControl(u.profileSelect, 112),
 		widget.NewLabel(t("theme")), compactControl(themeSelect, 96),
 		compactControl(language, 88),
@@ -325,23 +340,7 @@ func (u *UI) applyConfiguration(snapshot configurationSnapshot) {
 }
 
 func (u *UI) setMPTStages(stages []protocol.MPTStage) {
-	t := u.i18n.T
-	for i, value := range stages {
-		if i >= len(u.mpt.stages) {
-			break
-		}
-		if value.PressMM > 0 {
-			u.mpt.stages[i].press.SetValue(value.PressMM)
-		}
-		if value.ReleaseMM > 0 {
-			u.mpt.stages[i].release.SetValue(value.ReleaseMM)
-		}
-		if value.Output == 0 {
-			u.mpt.stages[i].output.SetSelected(t("output.disabled"))
-		} else {
-			u.mpt.stages[i].output.SetSelected(protocol.KeyName(value.Output))
-		}
-	}
+	u.setMPTStageControls(&u.mpt, stages)
 }
 
 func (u *UI) startAutoDiscovery() {
