@@ -17,6 +17,12 @@ type Exchanger interface {
 	Exchange(ctx context.Context, report []byte, expectedCommand byte) ([]byte, error)
 }
 
+// Sender is implemented by native transports that can confirm an output
+// report was written without waiting for a firmware acknowledgement.
+type Sender interface {
+	Send(ctx context.Context, report []byte) error
+}
+
 type Client struct{ device Exchanger }
 
 func NewClient(device Exchanger) *Client { return &Client{device: device} }
@@ -34,6 +40,15 @@ func (c *Client) request(ctx context.Context, expected, length, command byte, da
 		return nil, err
 	}
 	return normalizeResponse(response, expected)
+}
+
+func (c *Client) send(ctx context.Context, expected, length, command byte, data ...byte) error {
+	report := packet(length, command, data...)
+	if sender, ok := c.device.(Sender); ok {
+		return sender.Send(ctx, report)
+	}
+	_, err := c.request(ctx, expected, length, command, data...)
+	return err
 }
 
 func normalizeResponse(response []byte, expected byte) ([]byte, error) {

@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	keyboardUnit      float32 = 38
-	keyboardKeyHeight float32 = 38
+	keyboardPitch float32 = 42
+	keyboardGap   float32 = 4
 )
 
 type keyboardKey struct {
@@ -25,6 +25,7 @@ type keyboardKey struct {
 	label      string
 	overlay    string
 	width      float32
+	height     float32
 	fill       color.Color
 	depth      float64
 	depthFill  color.Color
@@ -34,9 +35,9 @@ type keyboardKey struct {
 	onTapped   func(int)
 }
 
-func newKeyboardKey(index int, width float32, onTapped func(int)) *keyboardKey {
+func newKeyboardKey(index int, width, height float32, onTapped func(int)) *keyboardKey {
 	key := &keyboardKey{
-		index: index, label: protocol.MatrixKeyLabel(index), width: width,
+		index: index, label: protocol.MatrixKeyLabel(index), width: width, height: height,
 		fill: theme.InputBackgroundColor(), onTapped: onTapped, flashOnTap: true,
 	}
 	key.ExtendBaseWidget(key)
@@ -124,7 +125,7 @@ func (r *keyboardKeyRenderer) Layout(size fyne.Size) {
 }
 
 func (r *keyboardKeyRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(keyboardUnit*r.key.width, keyboardKeyHeight)
+	return fyne.NewSize(r.key.width*keyboardPitch-keyboardGap, r.key.height*keyboardPitch-keyboardGap)
 }
 
 func (r *keyboardKeyRenderer) Refresh() {
@@ -166,10 +167,10 @@ func (r *keyboardKeyRenderer) Objects() []fyne.CanvasObject {
 
 func (r *keyboardKeyRenderer) Destroy() {}
 
-type keySpec struct {
-	index int
-	width float32
-	gap   float32
+type keyPlacement struct {
+	index         int
+	x, y          float32
+	width, height float32
 }
 
 type KeyboardView struct {
@@ -182,36 +183,25 @@ type KeyboardView struct {
 
 func NewKeyboardView(onTapped func(int)) *KeyboardView {
 	view := &KeyboardView{keys: make(map[int]*keyboardKey), selected: -1, onTapped: onTapped}
-	rows := [][]keySpec{
-		appendSpecs(spec(0, 1), gap(0.65), keyRange(2, 5, 1), gap(0.3), keyRange(6, 9, 1), gap(0.3), keyRange(10, 13, 1), gap(0.45), keyRange(14, 16, 1), gap(0.45), keyRange(17, 20, 1)),
-		appendSpecs(keyRange(21, 33, 1), spec(34, 2), gap(0.45), keyRange(35, 37, 1), gap(0.45), keyRange(38, 41, 1)),
-		appendSpecs(spec(42, 1.5), keyRange(43, 54, 1), spec(55, 1.5), gap(0.45), keyRange(56, 58, 1), gap(0.45), keyRange(59, 62, 1)),
-		appendSpecs(spec(63, 1.75), keyRange(64, 74, 1), spec(76, 2.25), gap(3.9), keyRange(80, 82, 1)),
-		appendSpecs(spec(84, 2.25), keyRange(86, 95, 1), spec(96, 2.75), gap(1.45), spec(99, 1), gap(1.45), keyRange(101, 104, 1)),
-		appendSpecs(keyRange(105, 107, 1.25), spec(110, 6.25), keyRange(114, 117, 1.25), gap(0.45), keyRange(119, 121, 1), gap(0.45), spec(123, 2), spec(124, 1)),
-	}
-	rowObjects := make([]fyne.CanvasObject, 0, len(rows))
-	for _, row := range rows {
-		items := make([]fyne.CanvasObject, 0, len(row))
-		for _, item := range row {
-			if item.index < 0 {
-				spacer := canvas.NewRectangle(color.Transparent)
-				spacer.SetMinSize(fyne.NewSize(keyboardUnit*item.gap, keyboardKeyHeight))
-				items = append(items, spacer)
-				continue
+	keyboardSize := fyne.NewSize(23*keyboardPitch-keyboardGap, 6*keyboardPitch-keyboardGap)
+	background := canvas.NewRectangle(color.Transparent)
+	background.SetMinSize(keyboardSize)
+	background.Resize(keyboardSize)
+	objects := []fyne.CanvasObject{background}
+	for _, item := range fullSizeKeyboardLayout() {
+		key := newKeyboardKey(item.index, item.width, item.height, func(index int) {
+			view.Select(index)
+			if view.onTapped != nil {
+				view.onTapped(index)
 			}
-			key := newKeyboardKey(item.index, item.width, func(index int) {
-				view.Select(index)
-				if view.onTapped != nil {
-					view.onTapped(index)
-				}
-			})
-			view.keys[item.index] = key
-			items = append(items, key)
-		}
-		rowObjects = append(rowObjects, container.NewHBox(items...))
+		})
+		key.Move(fyne.NewPos(item.x*keyboardPitch, item.y*keyboardPitch))
+		key.Resize(fyne.NewSize(item.width*keyboardPitch-keyboardGap, item.height*keyboardPitch-keyboardGap))
+		view.keys[item.index] = key
+		objects = append(objects, key)
 	}
-	view.root = container.NewVBox(rowObjects...)
+	view.root = container.NewWithoutLayout(objects...)
+	view.root.Resize(keyboardSize)
 	return view
 }
 
@@ -259,23 +249,60 @@ func (v *KeyboardView) ForEach(fn func(index int, key *keyboardKey)) {
 	}
 }
 
-func spec(index int, width float32) []keySpec { return []keySpec{{index: index, width: width}} }
-func gap(width float32) []keySpec             { return []keySpec{{index: -1, gap: width}} }
-
-func keyRange(first, last int, width float32) []keySpec {
-	result := make([]keySpec, 0, last-first+1)
-	for index := first; index <= last; index++ {
-		result = append(result, keySpec{index: index, width: width})
+func fullSizeKeyboardLayout() []keyPlacement {
+	var keys []keyPlacement
+	add := func(index int, x, y, width, height float32) {
+		keys = append(keys, keyPlacement{index: index, x: x, y: y, width: width, height: height})
 	}
-	return result
-}
-
-func appendSpecs(groups ...[]keySpec) []keySpec {
-	var result []keySpec
-	for _, group := range groups {
-		result = append(result, group...)
+	addRange := func(first, last int, x, y float32) {
+		for index := first; index <= last; index++ {
+			add(index, x+float32(index-first), y, 1, 1)
+		}
 	}
-	return result
+
+	add(0, 0, 0, 1, 1)
+	addRange(2, 5, 2, 0)
+	addRange(6, 9, 6.5, 0)
+	addRange(10, 13, 11, 0)
+	addRange(14, 16, 15.5, 0)
+	addRange(17, 20, 19, 0)
+
+	addRange(21, 33, 0, 1)
+	add(34, 13, 1, 2, 1)
+	addRange(35, 37, 15.5, 1)
+	addRange(38, 41, 19, 1)
+
+	add(42, 0, 2, 1.5, 1)
+	addRange(43, 54, 1.5, 2)
+	add(55, 13.5, 2, 1.5, 1)
+	addRange(56, 58, 15.5, 2)
+	addRange(59, 61, 19, 2)
+	add(62, 22, 2, 1, 2)
+
+	add(63, 0, 3, 1.75, 1)
+	addRange(64, 74, 1.75, 3)
+	add(76, 12.75, 3, 2.25, 1)
+	addRange(80, 82, 19, 3)
+
+	add(84, 0, 4, 2.25, 1)
+	addRange(86, 95, 2.25, 4)
+	add(96, 12.25, 4, 2.75, 1)
+	add(99, 16.5, 4, 1, 1)
+	addRange(101, 103, 19, 4)
+	add(104, 22, 4, 1, 2)
+
+	add(105, 0, 5, 1.25, 1)
+	add(106, 1.25, 5, 1.25, 1)
+	add(107, 2.5, 5, 1.25, 1)
+	add(110, 3.75, 5, 6.25, 1)
+	add(114, 10, 5, 1.25, 1)
+	add(115, 11.25, 5, 1.25, 1)
+	add(116, 12.5, 5, 1.25, 1)
+	add(117, 13.75, 5, 1.25, 1)
+	addRange(119, 121, 15.5, 5)
+	add(123, 19, 5, 2, 1)
+	add(124, 21, 5, 1, 1)
+	return keys
 }
 
 func blendColor(a, b color.Color, amount float64) color.Color {

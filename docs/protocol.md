@@ -31,7 +31,7 @@ The keyboard configurator interface is selected with vendor ID `0x3233` and usag
 | `0x9a` | `0x9b` | Read active memory profile |
 | `0x9c` | `0x9d` | Switch memory profile |
 
-The standard lighting write payload contains seven settings bytes. Rainbow uses the firmware's extended nine-byte form, adding a three-value pattern selector and a four-way direction selector. Commands are spaced by 20 ms to match the original configurator, and a timed-out transaction is retried once because the keyboard can occasionally defer a response while committing onboard memory.
+The standard lighting write payload contains seven settings bytes. Rainbow uses the firmware's extended nine-byte form, adding a three-value pattern selector and a four-way direction selector. Commands are spaced by 20 ms to match the original configurator, and timed-out request/response transactions are retried once because the keyboard can occasionally defer a response while committing onboard memory. Lighting writes use HID write confirmation instead of waiting for optional `0x08` firmware acknowledgement packets.
 
 Key maps have 126 two-byte entries and are transferred in five chunks. Actuation settings have 126 three-byte entries and are transferred in seven 54-byte chunks. Macros use a fixed 401-byte payload transferred in eight chunks. MPT presets contain four five-byte trigger stages.
 

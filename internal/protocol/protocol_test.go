@@ -3,6 +3,7 @@ package protocol
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -126,6 +127,35 @@ func TestRainbowLightingCodec(t *testing.T) {
 	if got := decodeSpeed(9); got != 10 {
 		t.Fatalf("decodeSpeed(9) = %d, want 10", got)
 	}
+}
+
+func TestLightingUsesWriteOnlyTransportWhenAvailable(t *testing.T) {
+	fake := &fakeSender{}
+	client := NewClient(fake)
+	if err := client.SetLighting(context.Background(), LightingSettings{Effect: 13, Speed: 50, Brightness: 100}); err != nil {
+		t.Fatal(err)
+	}
+	if fake.exchangeCalls != 0 || fake.sendCalls != 1 {
+		t.Fatalf("exchange calls=%d send calls=%d, want 0 and 1", fake.exchangeCalls, fake.sendCalls)
+	}
+}
+
+type fakeSender struct {
+	exchangeCalls int
+	sendCalls     int
+}
+
+func (f *fakeSender) Exchange(context.Context, []byte, byte) ([]byte, error) {
+	f.exchangeCalls++
+	return nil, errors.New("Exchange should not be called")
+}
+
+func (f *fakeSender) Send(_ context.Context, report []byte) error {
+	f.sendCalls++
+	if len(report) < 4 || report[2] != 7 {
+		return fmt.Errorf("unexpected lighting report %v", report)
+	}
+	return nil
 }
 
 type fakeExchange struct {

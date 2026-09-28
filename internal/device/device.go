@@ -125,6 +125,36 @@ type Session struct {
 	lastExchange time.Time
 }
 
+// Send writes a command that the keyboard may apply without acknowledging.
+// Any late acknowledgement is harmless: the next Exchange filters reports by
+// command before returning them to the protocol layer.
+func (s *Session) Send(ctx context.Context, report []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.device == nil {
+		return errors.New("keyboard is disconnected")
+	}
+	if len(report)+1 > maxReportBytes {
+		return fmt.Errorf("output report is too large: %d bytes", len(report))
+	}
+	if wait := commandSpacing - time.Since(s.lastExchange); wait > 0 {
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	out := make([]byte, len(report)+1)
+	copy(out[1:], report)
+	if _, err := s.device.Write(out); err != nil {
+		return fmt.Errorf("write output report: %w", err)
+	}
+	s.lastExchange = time.Now()
+	return nil
+}
+
 func (s *Session) Exchange(ctx context.Context, report []byte, expectedCommand byte) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
