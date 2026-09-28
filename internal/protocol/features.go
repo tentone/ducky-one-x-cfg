@@ -22,6 +22,13 @@ func (c *Client) Lighting(ctx context.Context) (LightingSettings, error) {
 }
 
 func (c *Client) SetLighting(ctx context.Context, settings LightingSettings) error {
+	if settings.Effect == 21 {
+		_, err := c.request(ctx, 8, 9, 7,
+			settings.Effect, encodeSpeed(settings.Speed), settings.Red, settings.Green, settings.Blue,
+			encodeBrightness(settings.Brightness), settings.Variant, 2, settings.ColorMode, packetStart,
+		)
+		return err
+	}
 	_, err := c.request(ctx, 8, 7, 7,
 		settings.Effect, encodeSpeed(settings.Speed), settings.Red, settings.Green, settings.Blue,
 		encodeBrightness(settings.Brightness), settings.Variant, packetStart,

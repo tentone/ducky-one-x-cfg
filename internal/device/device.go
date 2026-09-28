@@ -15,7 +15,8 @@ import (
 
 const (
 	maxReportBytes = 256
-	ioTimeout      = 2500 * time.Millisecond
+	ioTimeout      = 5 * time.Second
+	commandSpacing = 20 * time.Millisecond
 )
 
 type Descriptor struct {
@@ -118,9 +119,10 @@ func (m *Manager) Close() error {
 }
 
 type Session struct {
-	mu     sync.Mutex
-	device *hid.Device
-	closed bool
+	mu           sync.Mutex
+	device       *hid.Device
+	closed       bool
+	lastExchange time.Time
 }
 
 func (s *Session) Exchange(ctx context.Context, report []byte, expectedCommand byte) ([]byte, error) {
@@ -132,44 +134,68 @@ func (s *Session) Exchange(ctx context.Context, report []byte, expectedCommand b
 	if len(report)+1 > maxReportBytes {
 		return nil, fmt.Errorf("output report is too large: %d bytes", len(report))
 	}
+	if wait := commandSpacing - time.Since(s.lastExchange); wait > 0 {
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	defer func() { s.lastExchange = time.Now() }()
 	// HIDAPI pads short reports to the descriptor size on platforms that
 	// require it (notably Windows). Passing only the meaningful bytes also
 	// avoids exceeding a device whose report is smaller than our read buffer.
 	out := make([]byte, len(report)+1)
 	out[0] = 0 // HID report ID, matching WebHID sendReport(0, ...).
 	copy(out[1:], report)
-	if _, err := s.device.Write(out); err != nil {
-		return nil, fmt.Errorf("write output report: %w", err)
-	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if _, err := s.device.Write(out); err != nil {
+			return nil, fmt.Errorf("write output report: %w", err)
+		}
 
-	deadline := time.Now().Add(ioTimeout)
-	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
-		deadline = contextDeadline
+		deadline := time.Now().Add(ioTimeout)
+		if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+			deadline = contextDeadline
+		}
+		for {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				break
+			}
+			in := make([]byte, maxReportBytes)
+			n, err := s.device.ReadWithTimeout(in, remaining)
+			if err != nil {
+				if errors.Is(err, hid.ErrTimeout) {
+					break
+				}
+				return nil, fmt.Errorf("read input report: %w", err)
+			}
+			packet := normalizeInput(in[:n])
+			if len(packet) < 3 {
+				continue
+			}
+			if packet[0] != 0x66 || packet[2] != expectedCommand {
+				// Profile-change and matrix-test reports can arrive asynchronously.
+				continue
+			}
+			return append([]byte(nil), packet...), nil
+		}
+		if attempt == 0 {
+			timer := time.NewTimer(commandSpacing)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
+		}
 	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, fmt.Errorf("waiting for command 0x%02x: %w", expectedCommand, hid.ErrTimeout)
-		}
-		in := make([]byte, maxReportBytes)
-		n, err := s.device.ReadWithTimeout(in, remaining)
-		if err != nil {
-			return nil, fmt.Errorf("read input report: %w", err)
-		}
-		in = in[:n]
-		packet := normalizeInput(in)
-		if len(packet) < 3 {
-			continue
-		}
-		if packet[0] != 0x66 || packet[2] != expectedCommand {
-			// Profile-change and matrix-test reports can arrive asynchronously.
-			continue
-		}
-		return append([]byte(nil), packet...), nil
-	}
+	return nil, fmt.Errorf("waiting for command 0x%02x after retry: %w", expectedCommand, hid.ErrTimeout)
 }
 
 func normalizeInput(report []byte) []byte {

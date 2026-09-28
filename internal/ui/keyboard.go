@@ -21,20 +21,23 @@ const (
 
 type keyboardKey struct {
 	widget.BaseWidget
-	index    int
-	label    string
-	overlay  string
-	width    float32
-	fill     color.Color
-	selected bool
-	flashing bool
-	onTapped func(int)
+	index      int
+	label      string
+	overlay    string
+	width      float32
+	fill       color.Color
+	depth      float64
+	depthFill  color.Color
+	selected   bool
+	flashing   bool
+	flashOnTap bool
+	onTapped   func(int)
 }
 
 func newKeyboardKey(index int, width float32, onTapped func(int)) *keyboardKey {
 	key := &keyboardKey{
 		index: index, label: protocol.MatrixKeyLabel(index), width: width,
-		fill: theme.InputBackgroundColor(), onTapped: onTapped,
+		fill: theme.InputBackgroundColor(), onTapped: onTapped, flashOnTap: true,
 	}
 	key.ExtendBaseWidget(key)
 	return key
@@ -44,6 +47,7 @@ func (k *keyboardKey) CreateRenderer() fyne.WidgetRenderer {
 	background := canvas.NewRectangle(k.fill)
 	background.CornerRadius = 4
 	background.StrokeWidth = 1
+	depthFill := canvas.NewRectangle(color.Transparent)
 	label := canvas.NewText(k.label, theme.ForegroundColor())
 	label.Alignment = fyne.TextAlignCenter
 	label.TextSize = 10
@@ -51,14 +55,19 @@ func (k *keyboardKey) CreateRenderer() fyne.WidgetRenderer {
 	overlay.Alignment = fyne.TextAlignCenter
 	overlay.TextSize = 8
 	overlay.TextStyle = fyne.TextStyle{Bold: true}
-	return &keyboardKeyRenderer{key: k, background: background, label: label, overlay: overlay}
+	return &keyboardKeyRenderer{key: k, background: background, depthFill: depthFill, label: label, overlay: overlay}
 }
 
 func (k *keyboardKey) Tapped(*fyne.PointEvent) {
-	k.flashing = true
-	k.Refresh()
+	if k.flashOnTap {
+		k.flashing = true
+		k.Refresh()
+	}
 	if k.onTapped != nil {
 		k.onTapped(k.index)
+	}
+	if !k.flashOnTap {
+		return
 	}
 	time.AfterFunc(180*time.Millisecond, func() {
 		fyne.Do(func() {
@@ -66,6 +75,18 @@ func (k *keyboardKey) Tapped(*fyne.PointEvent) {
 			k.Refresh()
 		})
 	})
+}
+
+func (k *keyboardKey) SetDepth(level float64, fill color.Color) {
+	if level < 0 {
+		level = 0
+	}
+	if level > 1 {
+		level = 1
+	}
+	k.depth = level
+	k.depthFill = fill
+	k.Refresh()
 }
 
 func (k *keyboardKey) SetOverlay(value string) {
@@ -86,12 +107,16 @@ func (k *keyboardKey) SetSelected(selected bool) {
 type keyboardKeyRenderer struct {
 	key        *keyboardKey
 	background *canvas.Rectangle
+	depthFill  *canvas.Rectangle
 	label      *canvas.Text
 	overlay    *canvas.Text
 }
 
 func (r *keyboardKeyRenderer) Layout(size fyne.Size) {
 	r.background.Resize(size)
+	depthHeight := size.Height * float32(r.key.depth)
+	r.depthFill.Move(fyne.NewPos(0, size.Height-depthHeight))
+	r.depthFill.Resize(fyne.NewSize(size.Width, depthHeight))
 	r.overlay.Move(fyne.NewPos(2, 2))
 	r.overlay.Resize(fyne.NewSize(size.Width-4, 12))
 	r.label.Move(fyne.NewPos(2, 14))
@@ -111,6 +136,12 @@ func (r *keyboardKeyRenderer) Refresh() {
 		fill = blendColor(fill, theme.PrimaryColor(), 0.72)
 	}
 	r.background.FillColor = fill
+	if r.key.depth > 0 && r.key.depthFill != nil {
+		r.depthFill.FillColor = r.key.depthFill
+		r.depthFill.Show()
+	} else {
+		r.depthFill.Hide()
+	}
 	if r.key.selected {
 		r.background.StrokeColor = theme.PrimaryColor()
 		r.background.StrokeWidth = 3
@@ -123,12 +154,14 @@ func (r *keyboardKeyRenderer) Refresh() {
 	r.label.Color = contrastColor(fill)
 	r.overlay.Color = contrastColor(fill)
 	r.background.Refresh()
+	r.depthFill.Refresh()
+	r.Layout(r.key.Size())
 	r.label.Refresh()
 	r.overlay.Refresh()
 }
 
 func (r *keyboardKeyRenderer) Objects() []fyne.CanvasObject {
-	return []fyne.CanvasObject{r.background, r.label, r.overlay}
+	return []fyne.CanvasObject{r.background, r.depthFill, r.label, r.overlay}
 }
 
 func (r *keyboardKeyRenderer) Destroy() {}
@@ -214,6 +247,12 @@ func (v *KeyboardView) SetAllColors(value color.Color) {
 	}
 }
 
+func (v *KeyboardView) SetTapFlash(enabled bool) {
+	for _, key := range v.keys {
+		key.flashOnTap = enabled
+	}
+}
+
 func (v *KeyboardView) ForEach(fn func(index int, key *keyboardKey)) {
 	for index, key := range v.keys {
 		fn(index, key)
@@ -259,6 +298,7 @@ type LightingAnimator struct {
 	keyboard *KeyboardView
 	mu       sync.RWMutex
 	settings protocol.LightingSettings
+	presses  map[int]time.Time
 	done     chan struct{}
 	stopOnce sync.Once
 	start    time.Time
@@ -266,7 +306,7 @@ type LightingAnimator struct {
 
 func NewLightingAnimator(keyboard *KeyboardView) *LightingAnimator {
 	animator := &LightingAnimator{
-		keyboard: keyboard, done: make(chan struct{}), start: time.Now(),
+		keyboard: keyboard, done: make(chan struct{}), start: time.Now(), presses: make(map[int]time.Time),
 		settings: protocol.LightingSettings{Effect: 13, Red: 234, Green: 168, Blue: 42, Brightness: 100, Speed: 50},
 	}
 	go animator.loop()
@@ -276,6 +316,12 @@ func NewLightingAnimator(keyboard *KeyboardView) *LightingAnimator {
 func (a *LightingAnimator) Set(settings protocol.LightingSettings) {
 	a.mu.Lock()
 	a.settings = settings
+	a.mu.Unlock()
+}
+
+func (a *LightingAnimator) Press(index int) {
+	a.mu.Lock()
+	a.presses[index] = time.Now()
 	a.mu.Unlock()
 }
 
@@ -291,14 +337,18 @@ func (a *LightingAnimator) loop() {
 		case now := <-ticker.C:
 			a.mu.RLock()
 			settings := a.settings
+			presses := make(map[int]time.Time, len(a.presses))
+			for index, pressedAt := range a.presses {
+				presses[index] = pressedAt
+			}
 			a.mu.RUnlock()
 			elapsed := now.Sub(a.start).Seconds()
-			fyne.Do(func() { a.draw(settings, elapsed) })
+			fyne.Do(func() { a.draw(settings, elapsed, now, presses) })
 		}
 	}
 }
 
-func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed float64) {
+func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed float64, now time.Time, presses map[int]time.Time) {
 	brightness := float64(settings.Brightness) / 100
 	if brightness <= 0 && settings.Effect != 103 {
 		brightness = 0.05
@@ -306,6 +356,7 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 	baseHue, saturation, value := rgbToHSV(settings.Red, settings.Green, settings.Blue)
 	speed := 0.35 + float64(settings.Speed)/55
 	a.keyboard.ForEach(func(index int, key *keyboardKey) {
+		key.SetDepth(0, color.Transparent)
 		keyValue := value * brightness
 		hue := baseHue
 		switch settings.Effect {
@@ -315,19 +366,56 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 			hue = math.Mod(baseHue+elapsed*speed*35, 360)
 			saturation = 1
 		case 25: // Reactive
-			wave := math.Mod(elapsed*speed*5, 12)
-			keyValue *= 0.2 + 0.8*math.Exp(-math.Abs(float64(index%21)-wave))
+			keyValue = 0.025
+			if pressedAt, ok := presses[index]; ok {
+				duration := 1.35 / speed
+				age := now.Sub(pressedAt).Seconds()
+				if age >= 0 && age < duration {
+					keyValue = brightness * (1 - age/duration)
+				}
+			}
 		case 39: // Ripple
 			distance := math.Abs(float64(index%21)-10) + math.Abs(float64(index/21)-2.5)*2
 			wave := math.Mod(elapsed*speed*7, 16)
 			keyValue *= 0.15 + 0.85*math.Exp(-math.Abs(distance-wave)*0.8)
 		case 21: // Rainbow
-			hue = math.Mod(float64(index)*7+elapsed*speed*55, 360)
+			row, column := float64(index/21), float64(index%21)
+			position := column
+			switch settings.ColorMode {
+			case 1: // Left
+				position = -column
+			case 2: // Down
+				position = row * 3
+			case 3: // Up
+				position = -row * 3
+			}
+			phase := math.Mod(position*0.075-elapsed*speed*0.28, 1)
+			if phase < 0 {
+				phase += 1
+			}
+			switch settings.Variant {
+			case 1: // Yellow / red
+				hue = 55 * triangleWave(phase)
+			case 2: // Blue / red
+				hue = 240 * triangleWave(phase)
+			default:
+				hue = phase * 360
+			}
 			saturation = 1
 			keyValue = brightness
 		case 49: // Analog reactive
-			hue = math.Mod(baseHue+float64(index%21)*4+elapsed*speed*18, 360)
-			keyValue *= 0.35 + 0.65*(math.Sin(elapsed*speed*2+float64(index)*0.18)+1)/2
+			keyValue = 0.025
+			if pressedAt, ok := presses[index]; ok {
+				age := now.Sub(pressedAt).Seconds()
+				level := 0.0
+				if age >= 0 && age < 0.24 {
+					level = age / 0.24
+				} else if age < 0.9 {
+					level = 1 - (age-0.24)/0.66
+				}
+				red, green, blue := hsvToRGB(hue, saturation, math.Min(1, value*brightness))
+				key.SetDepth(level, color.NRGBA{R: red, G: green, B: blue, A: 255})
+			}
 		case 103: // Off
 			keyValue = 0.035
 			saturation = 0
@@ -335,6 +423,13 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 		red, green, blue := hsvToRGB(hue, saturation, math.Min(1, keyValue))
 		key.SetColor(color.NRGBA{R: red, G: green, B: blue, A: 255})
 	})
+}
+
+func triangleWave(value float64) float64 {
+	if value < 0.5 {
+		return value * 2
+	}
+	return (1 - value) * 2
 }
 
 func rgbToHSV(red, green, blue byte) (float64, float64, float64) {

@@ -98,8 +98,6 @@ func (u *UI) content() fyne.CanvasObject {
 	t := u.i18n.T
 	title := widget.NewLabel(t("app.title"))
 	title.TextStyle = fyne.TextStyle{Bold: true}
-	subtitle := widget.NewLabel(t("app.subtitle"))
-	subtitle.Importance = widget.LowImportance
 
 	refresh := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		u.autoConnect = true
@@ -114,16 +112,13 @@ func (u *UI) content() fyne.CanvasObject {
 	language := widget.NewSelect([]string{"English"}, func(string) {})
 	language.SetSelected("English")
 
-	header := container.NewBorder(
-		nil, nil,
-		container.NewVBox(title, subtitle),
-		container.NewHBox(
-			widget.NewLabel(t("profile")), u.profileSelect,
-			widget.NewLabel(t("theme")), themeSelect,
-			widget.NewLabel(t("language")), language,
-		),
-		container.NewBorder(nil, nil, nil, container.NewHBox(refresh, u.connectButton), u.deviceSelect),
+	preferences := container.NewHBox(
+		widget.NewLabel(t("profile")), compactControl(u.profileSelect, 112),
+		widget.NewLabel(t("theme")), compactControl(themeSelect, 96),
+		compactControl(language, 88),
 	)
+	deviceControls := container.NewHBox(compactControl(u.deviceSelect, 220), refresh, u.connectButton)
+	header := container.NewBorder(nil, nil, title, preferences, deviceControls)
 
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon(t("tab.keys"), theme.ComputerIcon(), u.keys.root),
@@ -136,6 +131,10 @@ func (u *UI) content() fyne.CanvasObject {
 
 	statusBar := container.NewBorder(nil, nil, themeStatusIcon(), nil, container.NewVBox(u.status, u.detail))
 	return container.NewBorder(container.NewVBox(header, widget.NewSeparator()), statusBar, nil, nil, tabs)
+}
+
+func compactControl(object fyne.CanvasObject, width float32) fyne.CanvasObject {
+	return container.NewGridWrap(fyne.NewSize(width, 36), object)
 }
 
 func themeStatusIcon() fyne.CanvasObject {

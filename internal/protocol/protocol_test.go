@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -104,6 +105,26 @@ func TestLightingCodec(t *testing.T) {
 	}
 	if err := client.SetLighting(context.Background(), settings); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRainbowLightingCodec(t *testing.T) {
+	fake := &fakeExchange{fn: func(report []byte, expected byte) ([]byte, error) {
+		want := []byte{0x66, 9, 7, 21, 9, 10, 20, 30, 9, 2, 2, 3, 0x66, 0x0d, 0x0a}
+		if !bytes.Equal(report, want) {
+			return nil, fmt.Errorf("wrong rainbow lighting report %v, want %v", report, want)
+		}
+		return []byte{0x66, 1, 8, 0}, nil
+	}}
+	settings := LightingSettings{
+		Effect: 21, Speed: 10, Red: 10, Green: 20, Blue: 30,
+		Brightness: 100, Variant: 2, ColorMode: 3,
+	}
+	if err := NewClient(fake).SetLighting(context.Background(), settings); err != nil {
+		t.Fatal(err)
+	}
+	if got := decodeSpeed(9); got != 10 {
+		t.Fatalf("decodeSpeed(9) = %d, want 10", got)
 	}
 }
 

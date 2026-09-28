@@ -190,7 +190,7 @@ func encodeSpeed(percent int) byte {
 
 func decodeSpeed(code byte) int {
 	if code >= 9 {
-		return 0
+		return 10
 	}
 	return 100 - int(code)*10
 }
