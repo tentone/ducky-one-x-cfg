@@ -68,6 +68,7 @@ func Run() error {
 	u.applySavedTheme()
 	u.window.Resize(fyne.NewSize(1120, 760))
 	u.window.SetContent(u.content())
+	u.installLightingKeyInput()
 	u.refreshDevices()
 	u.startAutoDiscovery()
 	u.window.ShowAndRun()
@@ -120,14 +121,20 @@ func (u *UI) content() fyne.CanvasObject {
 	deviceControls := container.NewHBox(compactControl(u.deviceSelect, 220), refresh, u.connectButton)
 	header := container.NewBorder(nil, nil, title, preferences, deviceControls)
 
+	lightingTab := container.NewTabItemWithIcon(t("tab.lighting"), theme.VisibilityIcon(), u.lighting.root)
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon(t("tab.keys"), theme.ComputerIcon(), u.keys.root),
-		container.NewTabItemWithIcon(t("tab.lighting"), theme.VisibilityIcon(), u.lighting.root),
+		lightingTab,
 		container.NewTabItemWithIcon(t("tab.actuation"), theme.SettingsIcon(), u.actuation.root),
 		container.NewTabItemWithIcon(t("tab.mpt"), theme.StorageIcon(), u.mpt.root),
 		container.NewTabItemWithIcon(t("tab.macros"), theme.ContentAddIcon(), u.macros.root),
 	)
 	tabs.SetTabLocation(container.TabLocationLeading)
+	tabs.OnSelected = func(item *container.TabItem) {
+		if item == lightingTab {
+			u.window.Canvas().Unfocus()
+		}
+	}
 
 	statusBar := container.NewBorder(nil, nil, themeStatusIcon(), nil, container.NewVBox(u.status, u.detail))
 	return container.NewBorder(container.NewVBox(header, widget.NewSeparator()), statusBar, nil, nil, tabs)

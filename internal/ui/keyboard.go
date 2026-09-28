@@ -26,6 +26,7 @@ type keyboardKey struct {
 	overlay    string
 	width      float32
 	height     float32
+	x          float32
 	y          float32
 	fill       color.Color
 	depth      float64
@@ -196,6 +197,7 @@ func NewKeyboardView(onTapped func(int)) *KeyboardView {
 				view.onTapped(index)
 			}
 		})
+		key.x = item.x
 		key.y = item.y
 		key.Move(fyne.NewPos(item.x*keyboardPitch, item.y*keyboardPitch))
 		key.Resize(fyne.NewSize(item.width*keyboardPitch-keyboardGap, item.height*keyboardPitch-keyboardGap))
@@ -396,6 +398,7 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 		key.SetDepth(0, color.Transparent)
 		keyValue := value * brightness
 		hue := baseHue
+		var directColor color.Color
 		switch settings.Effect {
 		case 3: // Breathing
 			keyValue *= 0.18 + 0.82*(math.Sin(elapsed*speed*math.Pi)+1)/2
@@ -412,9 +415,20 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 				}
 			}
 		case 39: // Ripple
-			distance := math.Abs(float64(index%21)-10) + math.Abs(float64(index/21)-2.5)*2
-			wave := math.Mod(elapsed*speed*7, 16)
-			keyValue *= 0.15 + 0.85*math.Exp(-math.Abs(distance-wave)*0.8)
+			keyValue = 0.025
+			keyX := float64(key.x + key.width/2)
+			keyY := float64(key.y + key.height/2)
+			for pressedIndex, pressedAt := range presses {
+				pressedKey, ok := a.keyboard.keys[pressedIndex]
+				if !ok {
+					continue
+				}
+				pressedX := float64(pressedKey.x + pressedKey.width/2)
+				pressedY := float64(pressedKey.y + pressedKey.height/2)
+				distance := math.Hypot(keyX-pressedX, (keyY-pressedY)*1.45)
+				intensity := rippleIntensity(now.Sub(pressedAt).Seconds(), distance, speed)
+				keyValue = math.Max(keyValue, brightness*value*intensity)
+			}
 		case 21: // Rainbow
 			row, column := float64(index/21), float64(index%21)
 			position := column
@@ -434,7 +448,8 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 			case 1: // Yellow / red
 				hue = 55 * triangleWave(phase)
 			case 2: // Blue / red
-				hue = 240 * triangleWave(phase)
+				red, green, blue := blueRedGradient(phase, brightness)
+				directColor = color.NRGBA{R: red, G: green, B: blue, A: 255}
 			default:
 				hue = phase * 360
 			}
@@ -449,9 +464,38 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 			keyValue = 0.035
 			saturation = 0
 		}
+		if directColor != nil {
+			key.SetColor(directColor)
+			return
+		}
 		red, green, blue := hsvToRGB(hue, saturation, math.Min(1, keyValue))
 		key.SetColor(color.NRGBA{R: red, G: green, B: blue, A: 255})
 	})
+}
+
+func rippleIntensity(age, distance, speed float64) float64 {
+	if age < 0 || speed <= 0 {
+		return 0
+	}
+	duration := 1.7 / speed
+	if age >= duration {
+		return 0
+	}
+	wave := age * speed * 8
+	decay := 1 - age/duration
+	return math.Exp(-math.Abs(distance-wave)*1.35) * decay
+}
+
+func blueRedGradient(phase, brightness float64) (byte, byte, byte) {
+	phase = math.Mod(phase, 1)
+	if phase < 0 {
+		phase += 1
+	}
+	brightness = math.Max(0, math.Min(1, brightness))
+	redAmount := triangleWave(phase)
+	red := byte(math.Round(255 * redAmount * brightness))
+	blue := byte(math.Round(255 * (1 - redAmount) * brightness))
+	return red, 0, blue
 }
 
 func analogPressDepth(age float64) float64 {

@@ -117,7 +117,7 @@ var english = map[string]string{
 	"direction.down":          "Down",
 	"direction.up":            "Up",
 	"random.color":            "Random color",
-	"lighting.description":    "Preview an animated RGB effect, adjust its parameters, then store it locally on the keyboard.",
+	"lighting.description":    "Preview an animated RGB effect, adjust its parameters, then store it locally on the keyboard. Reactive effects follow physical key presses while this window is active.",
 	"effect.static":           "Static",
 	"effect.breathing":        "Breathing",
 	"effect.cycle":            "Color cycle",

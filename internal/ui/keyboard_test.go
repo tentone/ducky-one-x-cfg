@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"math"
 	"testing"
 
@@ -23,6 +24,38 @@ func TestFullSizeKeyboardLayoutCoversMatrixKeysOnce(t *testing.T) {
 		if !ok || !seen[index] {
 			t.Fatalf("matrix key option %q is missing from the visual layout", option)
 		}
+	}
+}
+
+func TestBlueRedGradient(t *testing.T) {
+	tests := []struct {
+		phase float64
+		want  color.NRGBA
+	}{
+		{phase: 0, want: color.NRGBA{R: 0, G: 0, B: 255, A: 255}},
+		{phase: 0.25, want: color.NRGBA{R: 128, G: 0, B: 128, A: 255}},
+		{phase: 0.5, want: color.NRGBA{R: 255, G: 0, B: 0, A: 255}},
+		{phase: 0.75, want: color.NRGBA{R: 128, G: 0, B: 128, A: 255}},
+		{phase: 1, want: color.NRGBA{R: 0, G: 0, B: 255, A: 255}},
+	}
+	for _, test := range tests {
+		red, green, blue := blueRedGradient(test.phase, 1)
+		got := color.NRGBA{R: red, G: green, B: blue, A: 255}
+		if got != test.want {
+			t.Fatalf("blueRedGradient(%v, 1) = %#v, want %#v", test.phase, got, test.want)
+		}
+	}
+}
+
+func TestRippleStartsAtPressedKey(t *testing.T) {
+	if got := rippleIntensity(0, 0, 1); math.Abs(got-1) > 0.001 {
+		t.Fatalf("pressed key intensity = %v, want 1", got)
+	}
+	if got := rippleIntensity(0, 3, 1); got >= 0.1 {
+		t.Fatalf("distant key intensity = %v, want less than 0.1", got)
+	}
+	if got := rippleIntensity(2, 0, 1); got != 0 {
+		t.Fatalf("expired ripple intensity = %v, want 0", got)
 	}
 }
 

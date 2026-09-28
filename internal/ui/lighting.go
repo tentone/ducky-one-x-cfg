@@ -80,6 +80,7 @@ func (u *UI) buildLighting() lightingControls {
 	updateAnimation := func() {
 		if !controls.updating {
 			controls.animator.Set(lightingSettingsFromControls(&controls, t))
+			u.window.Canvas().Unfocus()
 		}
 	}
 	controls.effect.OnChanged = func(string) {
