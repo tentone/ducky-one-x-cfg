@@ -26,6 +26,7 @@ type keyboardKey struct {
 	overlay    string
 	width      float32
 	height     float32
+	y          float32
 	fill       color.Color
 	depth      float64
 	depthFill  color.Color
@@ -195,6 +196,7 @@ func NewKeyboardView(onTapped func(int)) *KeyboardView {
 				view.onTapped(index)
 			}
 		})
+		key.y = item.y
 		key.Move(fyne.NewPos(item.x*keyboardPitch, item.y*keyboardPitch))
 		key.Resize(fyne.NewSize(item.width*keyboardPitch-keyboardGap, item.height*keyboardPitch-keyboardGap))
 		view.keys[item.index] = key
@@ -382,6 +384,14 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 	}
 	baseHue, saturation, value := rgbToHSV(settings.Red, settings.Green, settings.Blue)
 	speed := 0.35 + float64(settings.Speed)/55
+	analogDepth := 0.0
+	if settings.Effect == 49 {
+		for _, pressedAt := range presses {
+			if depth := analogPressDepth(now.Sub(pressedAt).Seconds()); depth > analogDepth {
+				analogDepth = depth
+			}
+		}
+	}
 	a.keyboard.ForEach(func(index int, key *keyboardKey) {
 		key.SetDepth(0, color.Transparent)
 		keyValue := value * brightness
@@ -432,16 +442,8 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 			keyValue = brightness
 		case 49: // Analog reactive
 			keyValue = 0.025
-			if pressedAt, ok := presses[index]; ok {
-				age := now.Sub(pressedAt).Seconds()
-				level := 0.0
-				if age >= 0 && age < 0.24 {
-					level = age / 0.24
-				} else if age < 0.9 {
-					level = 1 - (age-0.24)/0.66
-				}
-				red, green, blue := hsvToRGB(hue, saturation, math.Min(1, value*brightness))
-				key.SetDepth(level, color.NRGBA{R: red, G: green, B: blue, A: 255})
+			if analogKeyIsLit(analogDepth, key.y, key.height) {
+				keyValue = value * brightness
 			}
 		case 103: // Off
 			keyValue = 0.035
@@ -450,6 +452,39 @@ func (a *LightingAnimator) draw(settings protocol.LightingSettings, elapsed floa
 		red, green, blue := hsvToRGB(hue, saturation, math.Min(1, keyValue))
 		key.SetColor(color.NRGBA{R: red, G: green, B: blue, A: 255})
 	})
+}
+
+func analogPressDepth(age float64) float64 {
+	if age < 0 {
+		return 0
+	}
+	if age < 0.24 {
+		return age / 0.24
+	}
+	if age < 0.9 {
+		return 1 - (age-0.24)/0.66
+	}
+	return 0
+}
+
+func analogBandRow(depth float64) int {
+	if depth <= 0 {
+		return -1
+	}
+	if depth >= 1 {
+		return 0
+	}
+	return 5 - int(math.Floor(depth*6))
+}
+
+func analogKeyIsLit(depth float64, y, height float32) bool {
+	row := analogBandRow(depth)
+	if row < 0 {
+		return false
+	}
+	rowTop := float32(row)
+	rowBottom := rowTop + 1
+	return y < rowBottom && y+height > rowTop
 }
 
 func triangleWave(value float64) float64 {
