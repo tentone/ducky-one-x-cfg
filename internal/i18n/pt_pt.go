@@ -58,6 +58,8 @@ var portuguesePortugal = map[string]string{
 	"theme.system":                       "Sistema",
 	"theme.light":                        "Claro",
 	"theme.dark":                         "Escuro",
+	"tray.show":                          "Abrir configurador",
+	"tray.quit":                          "Sair",
 	"language":                           "Idioma",
 	"tab.keys":                           "Definições das teclas",
 	"tab.lighting":                       "Iluminação",

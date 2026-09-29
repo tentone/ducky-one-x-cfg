@@ -58,6 +58,8 @@ var german = map[string]string{
 	"theme.system":                       "System",
 	"theme.light":                        "Hell",
 	"theme.dark":                         "Dunkel",
+	"tray.show":                          "Konfigurator öffnen",
+	"tray.quit":                          "Beenden",
 	"language":                           "Sprache",
 	"tab.keys":                           "Tastenbelegung",
 	"tab.lighting":                       "Beleuchtung",

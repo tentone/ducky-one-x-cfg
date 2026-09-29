@@ -17,8 +17,19 @@ It is written in Go with Fyne and communicates directly with the keyboard's vend
 - Fourteen onboard macro slots with press, release, click, delay, and text actions
 - System, light, and dark themes
 - Live language switching with English, French, German, European Portuguese, and Simplified Chinese
+- System-tray operation with close-to-tray behavior and an installer-managed start-at-login mode
 
 The protocol was translated from the saved Ducky One X web configurator in `webapp_snapshot`. Runtime code does not load anything from that snapshot or contact `duckyhub.io`.
+
+## Installers
+
+The installers register the application to start at desktop login with `--minimized`. The app continues connecting to the keyboard in the background; use the tray icon to open it or quit it completely. Closing the main window hides it in the tray.
+
+- **Windows:** run `./scripts/package-windows.ps1`. This creates `dist/Ducky-One-X-Configurator-Setup-<version>.exe` with Start menu and optional desktop shortcuts, a system-wide startup entry, and an uninstaller. Building requires Inno Setup 6.
+- **Linux:** run `sh ./scripts/package-linux.sh`. This creates both a Debian package and a generic `.tar.gz` installer bundle. The packages install the desktop entry, system-wide XDG autostart entry, and Ducky HID udev rule.
+- **macOS:** run `sh ./scripts/package-macos.sh` on a Mac. This creates a `.pkg` containing the application bundle and a system LaunchAgent. Set `MACOS_SIGN_IDENTITY` and `MACOS_INSTALLER_IDENTITY` when signed distribution is required.
+
+A normal shortcut launch opens the window. `ducky-config --minimized` starts directly in the system tray.
 
 ## Run from source
 

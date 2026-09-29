@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/joseferrao/ducky-drv/internal/device"
@@ -45,6 +47,7 @@ type UI struct {
 	updating       bool
 	autoConnect    bool
 	done           chan struct{}
+	shutdown       func()
 
 	keys             keyControls
 	lighting         lightingControls
@@ -57,7 +60,12 @@ type UI struct {
 	autoSyncState autoSyncState
 }
 
-func Run() error {
+// Options controls desktop startup behavior.
+type Options struct {
+	StartMinimized bool
+}
+
+func Run(options Options) error {
 	manager, err := device.NewManager()
 	if err != nil {
 		return err
@@ -75,15 +83,22 @@ func Run() error {
 		i18n: catalog, manager: manager, profileStore: profileStore,
 		autoConnect: true, done: make(chan struct{}),
 	}
+	application.SetIcon(theme.ComputerIcon())
+	var shutdownOnce sync.Once
+	u.shutdown = func() {
+		shutdownOnce.Do(func() {
+			u.cancelAutoSync()
+			close(u.done)
+			if u.lighting.animator != nil {
+				u.lighting.animator.Stop()
+			}
+			if err := manager.Close(); err != nil {
+				log.Printf("close HID manager: %v", err)
+			}
+		})
+	}
 	u.window.SetOnClosed(func() {
-		u.cancelAutoSync()
-		close(u.done)
-		if u.lighting.animator != nil {
-			u.lighting.animator.Stop()
-		}
-		if err := manager.Close(); err != nil {
-			log.Printf("close HID manager: %v", err)
-		}
+		u.shutdown()
 	})
 	u.build()
 	u.applySavedTheme()
@@ -92,8 +107,37 @@ func Run() error {
 	u.installLightingKeyInput()
 	u.refreshDevices()
 	u.startAutoDiscovery()
-	u.window.ShowAndRun()
+	trayAvailable := u.configureSystemTray()
+	u.window.Show()
+	if options.StartMinimized && trayAvailable {
+		u.window.Hide()
+	}
+	application.Run()
+	u.shutdown()
 	return nil
+}
+
+func (u *UI) configureSystemTray() bool {
+	desktopApp, ok := u.app.(desktop.App)
+	if !ok {
+		return false
+	}
+	show := fyne.NewMenuItem(u.i18n.T("tray.show"), func() {
+		u.window.Show()
+		u.window.RequestFocus()
+	})
+	quit := fyne.NewMenuItem(u.i18n.T("tray.quit"), func() {
+		u.shutdown()
+		u.app.Quit()
+	})
+	quit.IsQuit = true
+	desktopApp.SetSystemTrayMenu(fyne.NewMenu(
+		u.i18n.T("app.title"), show, fyne.NewMenuItemSeparator(), quit,
+	))
+	desktopApp.SetSystemTrayIcon(theme.ComputerIcon())
+	desktopApp.SetSystemTrayWindow(u.window)
+	u.window.SetCloseIntercept(func() { u.window.Hide() })
+	return true
 }
 
 func (u *UI) build() {
@@ -544,6 +588,7 @@ func (u *UI) changeLanguage(name string) {
 	})
 	u.window.SetTitle(u.i18n.T("app.title"))
 	u.installLightingKeyInput()
+	u.configureSystemTray()
 }
 
 func languageFromNativeName(name string) (i18n.Language, bool) {

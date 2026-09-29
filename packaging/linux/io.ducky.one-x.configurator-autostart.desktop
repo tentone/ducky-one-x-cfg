@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ducky One X Configurator
+Comment=Connect to a Ducky One X keyboard in the background
+Exec=/usr/bin/ducky-config --minimized
+Terminal=false
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+StartupNotify=false

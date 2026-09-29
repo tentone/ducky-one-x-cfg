@@ -58,6 +58,8 @@ var english = map[string]string{
 	"theme.system":                       "System",
 	"theme.light":                        "Light",
 	"theme.dark":                         "Dark",
+	"tray.show":                          "Open configurator",
+	"tray.quit":                          "Quit",
 	"language":                           "Language",
 	"tab.keys":                           "Key settings",
 	"tab.lighting":                       "Lighting",

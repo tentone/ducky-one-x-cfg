@@ -58,6 +58,8 @@ var french = map[string]string{
 	"theme.system":                       "Système",
 	"theme.light":                        "Clair",
 	"theme.dark":                         "Sombre",
+	"tray.show":                          "Ouvrir le configurateur",
+	"tray.quit":                          "Quitter",
 	"language":                           "Langue",
 	"tab.keys":                           "Touches",
 	"tab.lighting":                       "Éclairage",

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Ducky One X Configurator
+Comment=Configure a Ducky One X keyboard locally
+Exec=/usr/bin/ducky-config
+Terminal=false
+Categories=Settings;HardwareSettings;
+StartupNotify=true

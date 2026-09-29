@@ -58,6 +58,8 @@ var chineseSimplified = map[string]string{
 	"theme.system":                       "跟随系统",
 	"theme.light":                        "浅色",
 	"theme.dark":                         "深色",
+	"tray.show":                          "打开配置工具",
+	"tray.quit":                          "退出",
 	"language":                           "语言",
 	"tab.keys":                           "按键设置",
 	"tab.lighting":                       "灯光",
