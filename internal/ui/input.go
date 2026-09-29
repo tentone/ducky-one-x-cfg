@@ -5,24 +5,35 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 )
 
-// installLightingKeyInput mirrors the web configurator's keydown listener. It
-// observes keys while the application window has keyboard focus and forwards
-// them to the lighting preview using the keyboard's matrix indexes.
+// installLightingKeyInput observes keys while the application window has
+// keyboard focus. It feeds both reactive lighting and the input debug screen.
 func (u *UI) installLightingKeyInput() {
-	handle := func(event *fyne.KeyEvent) {
-		if event == nil || u.lighting.animator == nil {
+	handleDown := func(event *fyne.KeyEvent) {
+		if event == nil {
 			return
 		}
 		if index, ok := previewMatrixIndex(event.Name); ok {
-			u.lighting.animator.Press(index)
+			if u.lighting.animator != nil {
+				u.lighting.animator.Press(index)
+			}
+			u.debugKeyDown(index)
+		}
+	}
+	handleUp := func(event *fyne.KeyEvent) {
+		if event == nil {
+			return
+		}
+		if index, ok := previewMatrixIndex(event.Name); ok {
+			u.debugKeyUp(index)
 		}
 	}
 	canvas := u.window.Canvas()
 	if desktopCanvas, ok := canvas.(desktop.Canvas); ok {
-		desktopCanvas.SetOnKeyDown(handle)
+		desktopCanvas.SetOnKeyDown(handleDown)
+		desktopCanvas.SetOnKeyUp(handleUp)
 		return
 	}
-	canvas.SetOnTypedKey(handle)
+	canvas.SetOnTypedKey(handleDown)
 }
 
 func previewMatrixIndex(name fyne.KeyName) (int, bool) {

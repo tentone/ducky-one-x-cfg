@@ -49,6 +49,7 @@ type UI struct {
 	actuation actuationControls
 	mpt       mptControls
 	macros    macroControls
+	debug     debugControls
 
 	autoSyncState autoSyncState
 }
@@ -104,6 +105,7 @@ func (u *UI) build() {
 	u.actuation = u.buildActuation()
 	u.mpt = u.buildMPT()
 	u.macros = u.buildMacros()
+	u.debug = u.buildDebug()
 }
 
 func (u *UI) content() fyne.CanvasObject {
@@ -152,6 +154,7 @@ func (u *UI) content() fyne.CanvasObject {
 		container.NewTabItemWithIcon(t("tab.actuation"), theme.SettingsIcon(), u.actuation.root),
 		container.NewTabItemWithIcon(t("tab.mpt"), theme.StorageIcon(), u.mpt.root),
 		container.NewTabItemWithIcon(t("tab.macros"), theme.ContentAddIcon(), u.macros.root),
+		container.NewTabItemWithIcon(t("tab.debug"), theme.InfoIcon(), u.debug.root),
 	)
 	tabs.SetTabLocation(container.TabLocationLeading)
 	tabs.OnSelected = func(item *container.TabItem) {
@@ -413,6 +416,7 @@ func (u *UI) clearLoadedState() {
 	u.updateActuationKeyboard(&u.actuation)
 	u.macros.actions = nil
 	u.macros.list.Refresh()
+	u.clearDebugState()
 }
 
 func (u *UI) run(work func(context.Context) (func(), error)) {
@@ -645,6 +649,7 @@ func (u *UI) changeTheme(value string) {
 	u.app.Preferences().SetString(preferenceTheme, setting)
 	u.updateKeyKeyboard(&u.keys)
 	u.updateActuationKeyboard(&u.actuation)
+	u.refreshDebugTheme()
 }
 
 func (u *UI) applySavedTheme() {
