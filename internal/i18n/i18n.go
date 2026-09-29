@@ -9,7 +9,23 @@ import "sync"
 // Language identifies an installed translation.
 type Language string
 
-const English Language = "en"
+const (
+	English            Language = "en"
+	French             Language = "fr"
+	German             Language = "de"
+	PortuguesePortugal Language = "pt-PT"
+	ChineseSimplified  Language = "zh-CN"
+)
+
+var installedLanguages = []Language{English, French, German, PortuguesePortugal, ChineseSimplified}
+
+var nativeNames = map[Language]string{
+	English:            "English",
+	French:             "Français",
+	German:             "Deutsch",
+	PortuguesePortugal: "Português (Portugal)",
+	ChineseSimplified:  "中文（简体）",
+}
 
 // Catalog is a concurrency-safe translation catalog.
 type Catalog struct {
@@ -23,9 +39,28 @@ func New() *Catalog {
 	return &Catalog{
 		language: English,
 		strings: map[Language]map[string]string{
-			English: english,
+			English: english, French: french, German: german,
+			PortuguesePortugal: portuguesePortugal, ChineseSimplified: chineseSimplified,
 		},
 	}
+}
+
+// Languages returns the installed languages in display order.
+func Languages() []Language { return append([]Language(nil), installedLanguages...) }
+
+// NativeName returns the language name written in that language.
+func NativeName(language Language) string {
+	if name, ok := nativeNames[language]; ok {
+		return name
+	}
+	return string(language)
+}
+
+// Language returns the active language.
+func (c *Catalog) Language() Language {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.language
 }
 
 // SetLanguage changes the active language when it is installed.

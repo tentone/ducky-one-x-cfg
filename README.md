@@ -14,7 +14,7 @@ A native, offline desktop configurator for the Ducky One X keyboard. It is writt
 - Four-stage multi-point-trigger presets (MPT1–MPT14)
 - Fourteen onboard macro slots with press, release, click, delay, and text actions
 - System, light, and dark themes
-- Translation catalog architecture, with English included
+- Live language switching with English, French, German, European Portuguese, and Simplified Chinese
 
 The protocol was translated from the saved Ducky One X web configurator in `webapp_snapshot`. Runtime code does not load anything from that snapshot or contact `duckyhub.io`.
 

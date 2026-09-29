@@ -21,6 +21,7 @@ import (
 const (
 	preferenceTheme    = "appearance.theme"
 	preferenceAutoSync = "keyboard.auto_sync"
+	preferenceLanguage = "appearance.language"
 )
 
 type UI struct {
@@ -30,17 +31,18 @@ type UI struct {
 	manager *device.Manager
 	client  *protocol.Client
 
-	devices       []device.Descriptor
-	deviceSelect  *widget.Select
-	connectButton *widget.Button
-	profileSelect *widget.Select
-	autoSync      *widget.Check
-	status        *widget.Label
-	detail        *widget.Label
-	busy          bool
-	updating      bool
-	autoConnect   bool
-	done          chan struct{}
+	devices        []device.Descriptor
+	deviceSelect   *widget.Select
+	connectButton  *widget.Button
+	profileSelect  *widget.Select
+	languageSelect *widget.Select
+	autoSync       *widget.Check
+	status         *widget.Label
+	detail         *widget.Label
+	busy           bool
+	updating       bool
+	autoConnect    bool
+	done           chan struct{}
 
 	keys      keyControls
 	lighting  lightingControls
@@ -57,9 +59,11 @@ func Run() error {
 		return err
 	}
 	application := app.NewWithID("io.ducky.one-x.configurator")
+	catalog := i18n.New()
+	catalog.SetLanguage(i18n.Language(application.Preferences().StringWithFallback(preferenceLanguage, string(i18n.English))))
 	u := &UI{
-		app: application, window: application.NewWindow("Ducky One X Configurator"),
-		i18n: i18n.New(), manager: manager, autoConnect: true, done: make(chan struct{}),
+		app: application, window: application.NewWindow(catalog.T("app.title")),
+		i18n: catalog, manager: manager, autoConnect: true, done: make(chan struct{}),
 	}
 	u.window.SetOnClosed(func() {
 		u.cancelAutoSync()
@@ -117,8 +121,13 @@ func (u *UI) content() fyne.CanvasObject {
 		u.changeTheme,
 	)
 	themeSelect.SetSelected(u.themeLabel(u.app.Preferences().StringWithFallback(preferenceTheme, "system")))
-	language := widget.NewSelect([]string{"English"}, func(string) {})
-	language.SetSelected("English")
+	languages := i18n.Languages()
+	languageNames := make([]string, len(languages))
+	for index, language := range languages {
+		languageNames[index] = i18n.NativeName(language)
+	}
+	u.languageSelect = widget.NewSelect(languageNames, u.changeLanguage)
+	u.languageSelect.SetSelected(i18n.NativeName(u.i18n.Language()))
 	u.autoSync = widget.NewCheck(t("auto_sync"), func(enabled bool) {
 		u.app.Preferences().SetBool(preferenceAutoSync, enabled)
 		if !enabled {
@@ -131,7 +140,7 @@ func (u *UI) content() fyne.CanvasObject {
 		u.autoSync,
 		widget.NewLabel(t("profile")), compactControl(u.profileSelect, 112),
 		widget.NewLabel(t("theme")), compactControl(themeSelect, 96),
-		compactControl(language, 88),
+		compactControl(u.languageSelect, 150),
 	)
 	deviceControls := container.NewHBox(compactControl(u.deviceSelect, 220), refresh, u.connectButton)
 	header := container.NewBorder(nil, nil, title, preferences, deviceControls)
@@ -470,6 +479,155 @@ func (u *UI) confirmReset(feature string, confirmed func()) {
 		},
 		u.window,
 	)
+}
+
+type localizedUIState struct {
+	connected      bool
+	device         string
+	profile        int
+	layer          int
+	key            string
+	mapping        []protocol.Assignment
+	lighting       protocol.LightingSettings
+	customLighting protocol.CustomLightingSettings
+	actuationKey   string
+	actuation      []protocol.ActuationSetting
+	mptPreset      string
+	mptStages      []protocol.MPTStage
+	macroSlot      string
+	macroActions   []protocol.MacroAction
+}
+
+func (u *UI) changeLanguage(name string) {
+	language, ok := languageFromNativeName(name)
+	if !ok || language == u.i18n.Language() {
+		return
+	}
+	if u.busy {
+		u.languageSelect.SetSelected(i18n.NativeName(u.i18n.Language()))
+		return
+	}
+
+	state := u.captureLocalizedUIState()
+	if !u.i18n.SetLanguage(language) {
+		return
+	}
+	u.app.Preferences().SetString(preferenceLanguage, string(language))
+	u.cancelAutoSync()
+	if u.lighting.animator != nil {
+		u.lighting.animator.Stop()
+	}
+	u.withoutAutoSync(func() {
+		u.build()
+		u.window.SetContent(u.content())
+		u.restoreLocalizedUIState(state)
+	})
+	u.window.SetTitle(u.i18n.T("app.title"))
+	u.installLightingKeyInput()
+}
+
+func languageFromNativeName(name string) (i18n.Language, bool) {
+	for _, language := range i18n.Languages() {
+		if i18n.NativeName(language) == name {
+			return language, true
+		}
+	}
+	return "", false
+}
+
+func (u *UI) captureLocalizedUIState() localizedUIState {
+	t := u.i18n.T
+	state := localizedUIState{
+		connected:      u.client != nil,
+		device:         u.deviceSelect.Selected,
+		layer:          keyLayer(u.keys.layer.Selected, t),
+		key:            u.keys.key.Selected,
+		mapping:        append([]protocol.Assignment(nil), u.keys.mapping...),
+		lighting:       lightingSettingsFromControls(&u.lighting, t),
+		customLighting: customLightingFromControls(&u.lighting),
+		actuationKey:   u.actuation.key.Selected,
+		actuation:      append([]protocol.ActuationSetting(nil), u.actuation.settings...),
+		mptPreset:      u.mpt.preset.Selected,
+		mptStages:      make([]protocol.MPTStage, len(u.mpt.stages)),
+		macroSlot:      u.macros.slot.Selected,
+		macroActions:   append([]protocol.MacroAction(nil), u.macros.actions...),
+	}
+	if u.profileSelect.Selected == t("profile.2") {
+		state.profile = 1
+	}
+	for index, controls := range u.mpt.stages {
+		state.mptStages[index].PressMM = controls.press.Value
+		state.mptStages[index].ReleaseMM = controls.release.Value
+		if controls.output.Selected != t("output.disabled") {
+			state.mptStages[index].Output, _ = protocol.KeyCode(controls.output.Selected)
+			state.mptStages[index].Mouse = state.mptStages[index].Output >= 244 && state.mptStages[index].Output <= 246
+		}
+	}
+	return state
+}
+
+func (u *UI) restoreLocalizedUIState(state localizedUIState) {
+	options := make([]string, len(u.devices))
+	for index, descriptor := range u.devices {
+		options[index] = descriptor.DisplayName()
+	}
+	u.deviceSelect.SetOptions(options)
+	if state.device != "" {
+		u.deviceSelect.SetSelected(state.device)
+	}
+
+	u.keys.updating = true
+	if state.layer == 1 {
+		u.keys.layer.SetSelected(u.i18n.T("layer.fn"))
+	} else {
+		u.keys.layer.SetSelected(u.i18n.T("layer.base"))
+	}
+	u.keys.updating = false
+	if len(state.mapping) > 0 {
+		u.setKeyMapping(&u.keys, state.mapping)
+	}
+	if state.key != "" {
+		u.keys.key.SetSelected(state.key)
+	}
+	u.setLightingSettings(&u.lighting, state.lighting)
+	u.setCustomLighting(&u.lighting, state.customLighting)
+	if len(state.actuation) > 0 {
+		u.setActuationSettings(&u.actuation, state.actuation)
+	}
+	if state.actuationKey != "" {
+		u.actuation.key.SetSelected(state.actuationKey)
+	}
+	if state.mptPreset != "" {
+		u.mpt.preset.SetSelected(state.mptPreset)
+	}
+	u.setMPTStageControls(&u.mpt, state.mptStages)
+	if state.macroSlot != "" {
+		u.macros.slot.SetSelected(state.macroSlot)
+	}
+	u.macros.actions = state.macroActions
+	u.macros.selected = -1
+	u.macros.list.Refresh()
+
+	u.updating = true
+	if state.profile == 1 {
+		u.profileSelect.SetSelected(u.i18n.T("profile.2"))
+	} else {
+		u.profileSelect.SetSelected(u.i18n.T("profile.1"))
+	}
+	u.updating = false
+	if state.connected {
+		u.deviceSelect.Disable()
+		u.profileSelect.Enable()
+		u.connectButton.SetText(u.i18n.T("action.disconnect"))
+		u.connectButton.SetIcon(theme.MediaStopIcon())
+		u.status.SetText(u.i18n.T("connection.ready"))
+		u.detail.SetText(u.i18n.T("connection.ready"))
+	} else {
+		u.deviceSelect.Enable()
+		u.profileSelect.Disable()
+		u.status.SetText(u.i18n.T("connection.disconnected"))
+		u.detail.SetText(u.i18n.T("connection.wired"))
+	}
 }
 
 func (u *UI) changeTheme(value string) {
