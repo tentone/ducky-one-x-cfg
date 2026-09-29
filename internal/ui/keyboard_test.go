@@ -78,7 +78,7 @@ func TestAnalogPressDepth(t *testing.T) {
 	}
 }
 
-func TestAnalogBandMovesFromBottomToTop(t *testing.T) {
+func TestAnalogHighestLitRowMovesFromBottomToTop(t *testing.T) {
 	tests := []struct {
 		depth float64
 		row   int
@@ -91,20 +91,29 @@ func TestAnalogBandMovesFromBottomToTop(t *testing.T) {
 		{depth: 1, row: 0},
 	}
 	for _, test := range tests {
-		if got := analogBandRow(test.depth); got != test.row {
-			t.Fatalf("analogBandRow(%v) = %v, want %v", test.depth, got, test.row)
+		if got := analogHighestLitRow(test.depth); got != test.row {
+			t.Fatalf("analogHighestLitRow(%v) = %v, want %v", test.depth, got, test.row)
 		}
 	}
 }
 
-func TestAnalogBandLightsWholeIntersectingKeys(t *testing.T) {
+func TestAnalogFillKeepsAllLowerRowsLit(t *testing.T) {
 	if !analogKeyIsLit(0.01, 5, 1) {
 		t.Fatal("bottom-row key should be lit at the start of the sweep")
 	}
 	if analogKeyIsLit(0.01, 4, 1) {
 		t.Fatal("row above the band should remain unlit")
 	}
+	if !analogKeyIsLit(0.5, 2, 1) {
+		t.Fatal("the highest reached row should be lit")
+	}
+	if !analogKeyIsLit(0.5, 3, 1) || !analogKeyIsLit(0.5, 4, 1) || !analogKeyIsLit(0.5, 5, 1) {
+		t.Fatal("every row below the highest reached row should remain lit")
+	}
+	if analogKeyIsLit(0.5, 1, 1) {
+		t.Fatal("a row above the fill should remain unlit")
+	}
 	if !analogKeyIsLit(0.35, 2, 2) {
-		t.Fatal("a two-row key intersecting the band should light in full")
+		t.Fatal("a two-row key intersecting the fill should light in full")
 	}
 }

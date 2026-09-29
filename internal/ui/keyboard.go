@@ -542,7 +542,7 @@ func analogPressDepth(age float64) float64 {
 	return 0
 }
 
-func analogBandRow(depth float64) int {
+func analogHighestLitRow(depth float64) int {
 	if depth <= 0 {
 		return -1
 	}
@@ -553,13 +553,13 @@ func analogBandRow(depth float64) int {
 }
 
 func analogKeyIsLit(depth float64, y, height float32) bool {
-	row := analogBandRow(depth)
+	row := analogHighestLitRow(depth)
 	if row < 0 {
 		return false
 	}
-	rowTop := float32(row)
-	rowBottom := rowTop + 1
-	return y < rowBottom && y+height > rowTop
+	// The analog effect is a solid vertical fill. A key stays fully lit when
+	// any part of it is on or below the highest row reached by the fill.
+	return y+height > float32(row)
 }
 
 func triangleWave(value float64) float64 {
