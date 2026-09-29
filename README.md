@@ -1,6 +1,7 @@
 # Ducky One X Configurator
 
-A native, offline desktop configurator for the Ducky One X keyboard. It is written in Go with Fyne and communicates directly with the keyboard's vendor HID interface—no browser, account, or network connection is needed at runtime.
+A native, offline desktop configurator for the Ducky One X keyboard.
+It is written in Go with Fyne and communicates directly with the keyboard's vendor HID interface—no browser, account, or network connection is needed at runtime.
 
 ## Features
 
@@ -85,8 +86,7 @@ go test ./...
 
 ## Safety and hardware scope
 
-The application only enumerates HID interfaces with Ducky's vendor ID `0x3233` and configuration usage page `0x008c`. Writes are serialized and responses are matched to the expected command. Settings still change persistent keyboard memory, so test new macro and analog settings before relying on them in critical workflows.
-
+The application only enumerates HID interfaces with Ducky's vendor ID `0x3233` and configuration usage page `0x008c`.
+Writes are serialized and responses are matched to the expected command. Settings still change persistent keyboard memory, so test new macro and analog settings before relying on them in critical workflows.
 This is an independent project and is not affiliated with DuckyChannel International Co., Ltd.
-
 See [docs/protocol.md](docs/protocol.md) for the implemented command map and [docs/architecture.md](docs/architecture.md) for the code layout.
