@@ -9,5 +9,5 @@ if (Get-Command zig -ErrorAction SilentlyContinue) {
     throw "A C compiler is required. Install Zig or MSYS2/MinGW-w64."
 }
 
-go build -trimpath -ldflags="-H=windowsgui -s -w" -o "dist/ducky-config.exe" ./cmd/ducky-config
+go build -trimpath -ldflags="-H=windowsgui -linkmode=external -extldflags=-Wl,--subsystem,windows -s -w" -o "dist/ducky-config.exe" ./cmd/ducky-config
 Write-Host "Built dist/ducky-config.exe"
