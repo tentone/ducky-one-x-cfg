@@ -36,7 +36,7 @@ Section: utils
 Priority: optional
 Architecture: $arch
 Maintainer: Ducky One X Configurator contributors
-Depends: libc6, libgl1, libx11-6, libxcursor1, libxrandr2, libxinerama1, libxi6, libxxf86vm1, libudev1
+Depends: libc6, libgl1, libwayland-client0, libx11-6, libxcursor1, libxrandr2, libxinerama1, libxi6, libxxf86vm1, libudev1
 Description: Offline Ducky One X keyboard configurator
  Native Fyne application for key mappings, lighting, actuation, MPT,
  macros, onboard profiles, and software-managed profiles.
