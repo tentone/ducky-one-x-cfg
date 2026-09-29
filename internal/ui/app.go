@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/joseferrao/ducky-drv/internal/device"
 	"github.com/joseferrao/ducky-drv/internal/i18n"
+	"github.com/joseferrao/ducky-drv/internal/profiles"
 	"github.com/joseferrao/ducky-drv/internal/protocol"
 )
 
@@ -25,11 +26,12 @@ const (
 )
 
 type UI struct {
-	app     fyne.App
-	window  fyne.Window
-	i18n    *i18n.Catalog
-	manager *device.Manager
-	client  *protocol.Client
+	app          fyne.App
+	window       fyne.Window
+	i18n         *i18n.Catalog
+	manager      *device.Manager
+	client       *protocol.Client
+	profileStore *profiles.Store
 
 	devices        []device.Descriptor
 	deviceSelect   *widget.Select
@@ -44,12 +46,13 @@ type UI struct {
 	autoConnect    bool
 	done           chan struct{}
 
-	keys      keyControls
-	lighting  lightingControls
-	actuation actuationControls
-	mpt       mptControls
-	macros    macroControls
-	debug     debugControls
+	keys             keyControls
+	lighting         lightingControls
+	actuation        actuationControls
+	mpt              mptControls
+	macros           macroControls
+	debug            debugControls
+	softwareProfiles *softwareProfileControls
 
 	autoSyncState autoSyncState
 }
@@ -59,12 +62,18 @@ func Run() error {
 	if err != nil {
 		return err
 	}
+	profileStore, err := profiles.OpenDefault()
+	if err != nil {
+		_ = manager.Close()
+		return err
+	}
 	application := app.NewWithID("io.ducky.one-x.configurator")
 	catalog := i18n.New()
 	catalog.SetLanguage(i18n.Language(application.Preferences().StringWithFallback(preferenceLanguage, string(i18n.English))))
 	u := &UI{
 		app: application, window: application.NewWindow(catalog.T("app.title")),
-		i18n: catalog, manager: manager, autoConnect: true, done: make(chan struct{}),
+		i18n: catalog, manager: manager, profileStore: profileStore,
+		autoConnect: true, done: make(chan struct{}),
 	}
 	u.window.SetOnClosed(func() {
 		u.cancelAutoSync()
@@ -106,6 +115,8 @@ func (u *UI) build() {
 	u.mpt = u.buildMPT()
 	u.macros = u.buildMacros()
 	u.debug = u.buildDebug()
+	u.softwareProfiles = u.buildSoftwareProfiles()
+	u.updateSoftwareProfileActions()
 }
 
 func (u *UI) content() fyne.CanvasObject {
@@ -150,6 +161,7 @@ func (u *UI) content() fyne.CanvasObject {
 	lightingTab := container.NewTabItemWithIcon(t("tab.lighting"), theme.VisibilityIcon(), u.lighting.root)
 	tabs := container.NewAppTabs(
 		container.NewTabItemWithIcon(t("tab.keys"), theme.ComputerIcon(), u.keys.root),
+		container.NewTabItemWithIcon(t("tab.software_profiles"), theme.StorageIcon(), u.softwareProfiles.root),
 		lightingTab,
 		container.NewTabItemWithIcon(t("tab.actuation"), theme.SettingsIcon(), u.actuation.root),
 		container.NewTabItemWithIcon(t("tab.mpt"), theme.StorageIcon(), u.mpt.root),
@@ -216,6 +228,7 @@ func (u *UI) toggleConnection() {
 		u.connectButton.SetIcon(theme.MediaPlayIcon())
 		u.status.SetText(u.i18n.T("connection.disconnected"))
 		u.detail.SetText(u.i18n.T("connection.wired"))
+		u.updateSoftwareProfileActions()
 		return
 	}
 	u.autoConnect = true
@@ -280,6 +293,7 @@ func (u *UI) connectSelected() {
 			u.updating = false
 			u.connectButton.SetText(u.i18n.T("action.disconnect"))
 			u.connectButton.SetIcon(theme.MediaStopIcon())
+			u.updateSoftwareProfileActions()
 			if configurationErr == nil {
 				u.applyConfiguration(configuration)
 			}
@@ -449,6 +463,7 @@ func (u *UI) finish(apply func(), err error) {
 
 func (u *UI) setBusy(busy bool, message string) {
 	u.busy = busy
+	defer u.updateSoftwareProfileActions()
 	if busy {
 		u.connectButton.Disable()
 		u.deviceSelect.Disable()
@@ -486,20 +501,21 @@ func (u *UI) confirmReset(feature string, confirmed func()) {
 }
 
 type localizedUIState struct {
-	connected      bool
-	device         string
-	profile        int
-	layer          int
-	key            string
-	mapping        []protocol.Assignment
-	lighting       protocol.LightingSettings
-	customLighting protocol.CustomLightingSettings
-	actuationKey   string
-	actuation      []protocol.ActuationSetting
-	mptPreset      string
-	mptStages      []protocol.MPTStage
-	macroSlot      string
-	macroActions   []protocol.MacroAction
+	connected         bool
+	device            string
+	profile           int
+	layer             int
+	key               string
+	mapping           []protocol.Assignment
+	lighting          protocol.LightingSettings
+	customLighting    protocol.CustomLightingSettings
+	actuationKey      string
+	actuation         []protocol.ActuationSetting
+	mptPreset         string
+	mptStages         []protocol.MPTStage
+	macroSlot         string
+	macroActions      []protocol.MacroAction
+	softwareProfileID string
 }
 
 func (u *UI) changeLanguage(name string) {
@@ -556,6 +572,9 @@ func (u *UI) captureLocalizedUIState() localizedUIState {
 		macroSlot:      u.macros.slot.Selected,
 		macroActions:   append([]protocol.MacroAction(nil), u.macros.actions...),
 	}
+	if profile, ok := u.selectedSoftwareProfile(); ok {
+		state.softwareProfileID = profile.ID
+	}
 	if u.profileSelect.Selected == t("profile.2") {
 		state.profile = 1
 	}
@@ -611,6 +630,7 @@ func (u *UI) restoreLocalizedUIState(state localizedUIState) {
 	u.macros.actions = state.macroActions
 	u.macros.selected = -1
 	u.macros.list.Refresh()
+	u.refreshSoftwareProfiles(state.softwareProfileID)
 
 	u.updating = true
 	if state.profile == 1 {
@@ -632,6 +652,7 @@ func (u *UI) restoreLocalizedUIState(state localizedUIState) {
 		u.status.SetText(u.i18n.T("connection.disconnected"))
 		u.detail.SetText(u.i18n.T("connection.wired"))
 	}
+	u.updateSoftwareProfileActions()
 }
 
 func (u *UI) changeTheme(value string) {

@@ -9,6 +9,7 @@ It is written in Go with Fyne and communicates directly with the keyboard's vend
 - Automatic USB discovery, connection, firmware identification, and configuration loading
 - Auto Sync enabled by default, with debounced live updates for lighting, actuation, MPT presets, and macros
 - Switch between both onboard memory profiles and immediately load the selected profile
+- Keep an unlimited library of named software profiles on disk and load any one into the selected onboard memory profile
 - Visual full-size keyboard with click-to-edit Base and Fn key assignments
 - Interactive lighting previews driven by physical key presses: single-key reactive pulses, press-centered ripple, three directional rainbow patterns, a full-key analog light bar, and per-key color painting
 - Per-key actuation overlays, click feedback, and rapid-trigger settings across all 126 matrix positions
@@ -88,5 +89,6 @@ go test ./...
 
 The application only enumerates HID interfaces with Ducky's vendor ID `0x3233` and configuration usage page `0x008c`.
 Writes are serialized and responses are matched to the expected command. Settings still change persistent keyboard memory, so test new macro and analog settings before relying on them in critical workflows.
+Software profiles are saved as `profiles.json` under the operating system's per-user configuration directory. Each entry contains both key layers, lighting, actuation, all MPT presets, and all macro slots.
 This is an independent project and is not affiliated with DuckyChannel International Co., Ltd.
 See [docs/protocol.md](docs/protocol.md) for the implemented command map and [docs/architecture.md](docs/architecture.md) for the code layout.
