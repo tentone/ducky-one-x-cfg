@@ -152,10 +152,12 @@ func (u *UI) buildMacros() macroControls {
 	description := widget.NewLabel(t("macro.description"))
 	description.Wrapping = fyne.TextWrapWord
 	toolbar := container.NewBorder(nil, nil, container.NewHBox(widget.NewLabel(t("macro.slot")), controls.slot), nil, container.NewHBox(load, save, clear))
+	editorScroll := container.NewVScroll(container.NewPadded(editor))
+	workspace := container.NewHSplit(container.NewPadded(controls.list), editorScroll)
+	workspace.Offset = 0.62
 	controls.root = container.NewBorder(
-		container.NewVBox(description, widget.NewSeparator(), toolbar), nil, nil,
-		container.NewGridWrap(fyne.NewSize(360, 420), editor),
-		container.NewPadded(controls.list),
+		container.NewVBox(description, widget.NewSeparator(), toolbar), nil, nil, nil,
+		workspace,
 	)
 	return controls
 }
