@@ -10,9 +10,9 @@ import (
 	"fyne.io/fyne/v2"
 	fyneTest "fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
-	"github.com/joseferrao/ducky-drv/internal/i18n"
-	"github.com/joseferrao/ducky-drv/internal/profiles"
-	"github.com/joseferrao/ducky-drv/internal/protocol"
+	"github.com/tentone/ducky-drv/internal/i18n"
+	"github.com/tentone/ducky-drv/internal/profiles"
+	"github.com/tentone/ducky-drv/internal/protocol"
 )
 
 type shortcutRecorder struct {

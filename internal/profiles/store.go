@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joseferrao/ducky-drv/internal/protocol"
-	shortcuts "github.com/joseferrao/ducky-drv/internal/shortcuts/spec"
+	"github.com/tentone/ducky-drv/internal/protocol"
+	shortcuts "github.com/tentone/ducky-drv/internal/shortcuts/spec"
 )
 
 const fileVersion = 1

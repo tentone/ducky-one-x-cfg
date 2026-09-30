@@ -4,7 +4,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/joseferrao/ducky-drv/internal/ui"
+	"github.com/tentone/ducky-drv/internal/ui"
 )
 
 func main() {

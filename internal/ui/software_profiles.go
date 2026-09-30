@@ -12,8 +12,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/joseferrao/ducky-drv/internal/profiles"
-	"github.com/joseferrao/ducky-drv/internal/protocol"
+	"github.com/tentone/ducky-drv/internal/profiles"
+	"github.com/tentone/ducky-drv/internal/protocol"
 )
 
 const softwareProfileTimeout = 3 * time.Minute

@@ -1,6 +1,6 @@
 package shortcuts
 
-import "github.com/joseferrao/ducky-drv/internal/shortcuts/spec"
+import "github.com/tentone/ducky-drv/internal/shortcuts/spec"
 
 type Shortcut = spec.Shortcut
 

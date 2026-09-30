@@ -1,4 +1,4 @@
-module github.com/joseferrao/ducky-drv
+module github.com/tentone/ducky-drv
 
 go 1.24.0
 

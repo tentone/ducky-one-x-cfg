@@ -10,8 +10,8 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/joseferrao/ducky-drv/internal/profiles"
-	"github.com/joseferrao/ducky-drv/internal/shortcuts"
+	"github.com/tentone/ducky-drv/internal/profiles"
+	"github.com/tentone/ducky-drv/internal/shortcuts"
 )
 
 type profileShortcutManager interface {

@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/joseferrao/ducky-drv/internal/protocol"
+	"github.com/tentone/ducky-drv/internal/protocol"
 )
 
 type debugControls struct {

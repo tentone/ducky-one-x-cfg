@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/joseferrao/ducky-drv/internal/profiles"
-	"github.com/joseferrao/ducky-drv/internal/protocol"
+	"github.com/tentone/ducky-drv/internal/profiles"
+	"github.com/tentone/ducky-drv/internal/protocol"
 )
 
 type profileWriteRecorder struct {

@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/joseferrao/ducky-drv/internal/protocol"
+	"github.com/tentone/ducky-drv/internal/protocol"
 )
 
 func TestFullSizeKeyboardLayoutCoversMatrixKeysOnce(t *testing.T) {

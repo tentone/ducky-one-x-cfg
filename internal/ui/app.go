@@ -15,12 +15,12 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/joseferrao/ducky-drv/assets"
-	"github.com/joseferrao/ducky-drv/internal/device"
-	"github.com/joseferrao/ducky-drv/internal/i18n"
-	"github.com/joseferrao/ducky-drv/internal/profiles"
-	"github.com/joseferrao/ducky-drv/internal/protocol"
-	"github.com/joseferrao/ducky-drv/internal/startup"
+	"github.com/tentone/ducky-drv/assets"
+	"github.com/tentone/ducky-drv/internal/device"
+	"github.com/tentone/ducky-drv/internal/i18n"
+	"github.com/tentone/ducky-drv/internal/profiles"
+	"github.com/tentone/ducky-drv/internal/protocol"
+	"github.com/tentone/ducky-drv/internal/startup"
 )
 
 const (

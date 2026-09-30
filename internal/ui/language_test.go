@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	fyneTest "fyne.io/fyne/v2/test"
-	"github.com/joseferrao/ducky-drv/internal/i18n"
-	"github.com/joseferrao/ducky-drv/internal/protocol"
+	"github.com/tentone/ducky-drv/internal/i18n"
+	"github.com/tentone/ducky-drv/internal/protocol"
 )
 
 func TestLanguageNativeNameMapping(t *testing.T) {

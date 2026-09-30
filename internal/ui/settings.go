@@ -5,8 +5,8 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/joseferrao/ducky-drv/internal/i18n"
-	"github.com/joseferrao/ducky-drv/internal/startup"
+	"github.com/tentone/ducky-drv/internal/i18n"
+	"github.com/tentone/ducky-drv/internal/startup"
 )
 
 func (u *UI) openSettings() {

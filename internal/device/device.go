@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joseferrao/ducky-drv/internal/protocol"
 	"github.com/sstallion/go-hid"
+	"github.com/tentone/ducky-drv/internal/protocol"
 )
 
 const (

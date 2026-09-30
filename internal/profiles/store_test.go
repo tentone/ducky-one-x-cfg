@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/joseferrao/ducky-drv/internal/protocol"
+	"github.com/tentone/ducky-drv/internal/protocol"
 )
 
 func TestMetadataEditPersistsShortcutAndRejectsDuplicatesAtomically(t *testing.T) {
