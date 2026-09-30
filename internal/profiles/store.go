@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/joseferrao/ducky-drv/internal/protocol"
+	shortcuts "github.com/joseferrao/ducky-drv/internal/shortcuts/spec"
 )
 
 const fileVersion = 1
@@ -33,6 +34,7 @@ type Configuration struct {
 type Profile struct {
 	ID            string        `json:"id"`
 	Name          string        `json:"name"`
+	Shortcut      string        `json:"shortcut,omitempty"`
 	CreatedAt     time.Time     `json:"created_at"`
 	UpdatedAt     time.Time     `json:"updated_at"`
 	Configuration Configuration `json:"configuration"`
@@ -80,6 +82,7 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("unsupported software profile file version %d", file.Version)
 	}
 	seen := make(map[string]bool, len(file.Profiles))
+	seenShortcuts := make(map[string]bool)
 	for index := range file.Profiles {
 		profile := &file.Profiles[index]
 		profile.Name = strings.TrimSpace(profile.Name)
@@ -87,6 +90,17 @@ func Open(path string) (*Store, error) {
 			return nil, fmt.Errorf("software profile %d has an invalid ID", index+1)
 		}
 		seen[profile.ID] = true
+		shortcut, err := shortcuts.Parse(profile.Shortcut)
+		if err != nil {
+			return nil, fmt.Errorf("software profile %q shortcut: %w", profile.Name, err)
+		}
+		profile.Shortcut = shortcut.String()
+		if profile.Shortcut != "" {
+			if seenShortcuts[profile.Shortcut] {
+				return nil, fmt.Errorf("duplicate profile shortcut %q", profile.Shortcut)
+			}
+			seenShortcuts[profile.Shortcut] = true
+		}
 		if profile.Name == "" {
 			return nil, fmt.Errorf("software profile %d has no name", index+1)
 		}
@@ -180,6 +194,20 @@ func (s *Store) Update(id string, configuration Configuration) (Profile, error) 
 
 // Rename changes a profile's display name.
 func (s *Store) Rename(id, name string) (Profile, error) {
+	return s.editMetadata(id, name, nil)
+}
+
+// Edit atomically saves profile metadata without changing its configuration.
+func (s *Store) Edit(id, name, shortcut string) (Profile, error) {
+	parsed, err := shortcuts.Parse(shortcut)
+	if err != nil {
+		return Profile{}, err
+	}
+	shortcut = parsed.String()
+	return s.editMetadata(id, name, &shortcut)
+}
+
+func (s *Store) editMetadata(id, name string, shortcut *string) (Profile, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Profile{}, errors.New("profile name is empty")
@@ -187,11 +215,19 @@ func (s *Store) Rename(id, name string) (Profile, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := cloneProfiles(s.profiles)
+	for _, profile := range next {
+		if profile.ID != id && shortcut != nil && *shortcut != "" && profile.Shortcut == *shortcut {
+			return Profile{}, errors.New("shortcut already assigned to another profile")
+		}
+	}
 	for index := range next {
 		if next[index].ID != id {
 			continue
 		}
 		next[index].Name = name
+		if shortcut != nil {
+			next[index].Shortcut = *shortcut
+		}
 		next[index].UpdatedAt = time.Now().UTC()
 		if err := s.persist(next); err != nil {
 			return Profile{}, err

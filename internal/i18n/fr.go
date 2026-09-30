@@ -1,6 +1,16 @@
 package i18n
 
 var french = map[string]string{
+	"software_profiles.save":             "Enregistrer le profil",
+	"software_profiles.edit":             "Modifier le profil",
+	"shortcut.label":                     "Raccourci de chargement",
+	"shortcut.key":                       "Choisir une touche",
+	"shortcut.none":                      "Aucun raccourci",
+	"shortcut.clear":                     "Effacer",
+	"shortcut.hint":                      "Utilisez Ctrl, Alt ou Super avec une touche. Le raccourci charge ce profil dans la mémoire sélectionnée lorsque l’application est ouverte, y compris dans la zone de notification.",
+	"shortcut.duplicate":                 "Ce raccourci est déjà attribué à %s.",
+	"shortcut.unavailable":               "Le raccourci de %s est indisponible : %s",
+	"shortcut.busy":                      "Le clavier est occupé. Réessayez après la fin de l’opération en cours.",
 	"settings.title":                     "Paramètres",
 	"action.close":                       "Fermer",
 	"settings.startup":                   "Lancer automatiquement au démarrage",

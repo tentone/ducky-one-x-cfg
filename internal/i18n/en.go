@@ -1,6 +1,16 @@
 package i18n
 
 var english = map[string]string{
+	"software_profiles.save":             "Save profile",
+	"software_profiles.edit":             "Edit profile",
+	"shortcut.label":                     "Load shortcut",
+	"shortcut.key":                       "Choose a key",
+	"shortcut.none":                      "No shortcut",
+	"shortcut.clear":                     "Clear",
+	"shortcut.hint":                      "Use Ctrl, Alt, or Super with a key. The shortcut loads this profile into the selected memory profile while the app is running, including in the tray.",
+	"shortcut.duplicate":                 "This shortcut is already assigned to %s.",
+	"shortcut.unavailable":               "Shortcut for %s is unavailable: %s",
+	"shortcut.busy":                      "The keyboard is busy. Try the shortcut again when the current operation finishes.",
 	"settings.title":                     "Settings",
 	"action.close":                       "Close",
 	"settings.startup":                   "Launch automatically on startup",

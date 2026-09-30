@@ -1,6 +1,16 @@
 package i18n
 
 var chineseSimplified = map[string]string{
+	"software_profiles.save":             "保存配置文件",
+	"software_profiles.edit":             "编辑配置文件",
+	"shortcut.label":                     "加载快捷键",
+	"shortcut.key":                       "选择按键",
+	"shortcut.none":                      "无快捷键",
+	"shortcut.clear":                     "清除",
+	"shortcut.hint":                      "使用 Ctrl、Alt 或 Super 加一个按键。应用运行时（包括在托盘中），快捷键会将此配置文件加载到所选的键盘内存配置中。",
+	"shortcut.duplicate":                 "此快捷键已分配给 %s。",
+	"shortcut.unavailable":               "%s 的快捷键不可用：%s",
+	"shortcut.busy":                      "键盘正忙。请在当前操作完成后重试快捷键。",
 	"settings.title":                     "设置",
 	"action.close":                       "关闭",
 	"settings.startup":                   "开机时自动启动",

@@ -1,6 +1,16 @@
 package i18n
 
 var german = map[string]string{
+	"software_profiles.save":             "Profil speichern",
+	"software_profiles.edit":             "Profil bearbeiten",
+	"shortcut.label":                     "Tastenkürzel zum Laden",
+	"shortcut.key":                       "Taste auswählen",
+	"shortcut.none":                      "Kein Tastenkürzel",
+	"shortcut.clear":                     "Löschen",
+	"shortcut.hint":                      "Verwenden Sie Strg, Alt oder Super mit einer Taste. Das Tastenkürzel lädt dieses Profil in den ausgewählten Speicher, während die App läuft, auch im Infobereich.",
+	"shortcut.duplicate":                 "Dieses Tastenkürzel ist bereits %s zugewiesen.",
+	"shortcut.unavailable":               "Tastenkürzel für %s nicht verfügbar: %s",
+	"shortcut.busy":                      "Die Tastatur ist beschäftigt. Versuchen Sie es nach Abschluss des aktuellen Vorgangs erneut.",
 	"settings.title":                     "Einstellungen",
 	"action.close":                       "Schließen",
 	"settings.startup":                   "Beim Anmelden automatisch starten",

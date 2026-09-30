@@ -2,10 +2,55 @@ package profiles
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/joseferrao/ducky-drv/internal/protocol"
 )
+
+func TestMetadataEditPersistsShortcutAndRejectsDuplicatesAtomically(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profiles.json")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	one, err := s.Create("Original", validConfiguration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := s.Create("Other", validConfiguration())
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited, err := s.Edit(one.ID, " Renamed ", "alt + ctrl + 1")
+	if err != nil || edited.Name != "Renamed" || edited.Shortcut != "Ctrl+Alt+1" {
+		t.Fatalf("edit=%+v, %v", edited, err)
+	}
+	if !reflect.DeepEqual(edited.Configuration, one.Configuration) {
+		t.Fatal("metadata edit changed the keyboard snapshot")
+	}
+	if _, err := s.Edit(two.ID, "Should not save", "Ctrl+Alt+1"); err == nil {
+		t.Fatal("duplicate shortcut accepted")
+	}
+	if _, err := s.Edit(one.ID, "Should not save", "Shift+A"); err == nil {
+		t.Fatal("invalid shortcut accepted")
+	}
+	reloaded, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := reloaded.Get(one.ID)
+	other, _ := reloaded.Get(two.ID)
+	if got.Name != "Renamed" || got.Shortcut != "Ctrl+Alt+1" || other.Name != "Other" || other.Shortcut != "" {
+		t.Fatal("shortcut did not persist or failed edits changed metadata")
+	}
+	if _, err := s.Edit(one.ID, "Renamed", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Edit(two.ID, "Other", "Ctrl+Alt+1"); err != nil {
+		t.Fatalf("cleared shortcut unavailable: %v", err)
+	}
+}
 
 func TestStoreRoundTripAndUnlimitedProfiles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "profiles.json")

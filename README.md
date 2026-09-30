@@ -10,6 +10,7 @@ It is written in Go with Fyne and communicates directly with the keyboard's vend
 - Auto Sync enabled by default, with debounced live updates for lighting, actuation, MPT presets, and macros
 - Switch between both onboard memory profiles and immediately load the selected profile
 - Keep an unlimited library of named software profiles on disk and load any one into the selected onboard memory profile
+- Assign global shortcuts to software profiles and load them while the app is in the tray
 - Visual full-size keyboard with click-to-edit Base and Fn key assignments
 - Interactive lighting previews driven by physical key presses: single-key reactive pulses, press-centered ripple, three directional rainbow patterns, a full-key analog light bar, and per-key color painting
 - Per-key actuation overlays, click feedback, and rapid-trigger settings across all 126 matrix positions
@@ -41,6 +42,19 @@ installer startup entries for your account. On a source build, enabling startup
 registers the current executable, so use a permanent build rather than `go run`.
 
 ## Run from source
+
+Click a software profile to edit its name and assign a shortcut, such as
+**Ctrl+Alt+1**. Use **Clear** to remove a shortcut. Assignments are saved with the
+profile and registered each time the app starts. A shortcut loads the complete
+profile into the currently selected keyboard memory profile without opening
+the window or a confirmation dialog. Success and errors appear as desktop
+notifications. The app must be running and the keyboard connected.
+
+Global shortcuts support Windows, macOS, and Linux X11 sessions. On macOS,
+shortcut registration may require Accessibility permission in System Settings.
+Linux Wayland sessions do not support these global shortcuts. Conflicting or
+unavailable shortcuts are reported in the editor; the previous assignment is
+preserved when saving fails.
 
 Install Go 1.24 or later and a C compiler, then run:
 

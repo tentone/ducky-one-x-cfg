@@ -48,7 +48,7 @@ func (u *UI) buildKeys() keyControls {
 		u.showCurrentAssignment(&controls)
 	}
 	controls.layer.OnChanged = func(string) {
-		if controls.updating {
+		if controls.updating || u.updating {
 			return
 		}
 		controls.mapping = nil

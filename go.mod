@@ -3,6 +3,8 @@ module github.com/joseferrao/ducky-drv
 go 1.24.0
 
 require (
+	golang.design/x/hotkey v0.6.1
+	github.com/BurntSushi/xgb v0.0.0-20210121224620-deaf085860bc
 	fyne.io/fyne/v2 v2.8.1
 	github.com/sstallion/go-hid v0.15.0
 )

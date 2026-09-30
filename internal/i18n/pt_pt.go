@@ -1,6 +1,16 @@
 package i18n
 
 var portuguesePortugal = map[string]string{
+	"software_profiles.save":             "Guardar perfil",
+	"software_profiles.edit":             "Editar perfil",
+	"shortcut.label":                     "Atalho para carregar",
+	"shortcut.key":                       "Escolher uma tecla",
+	"shortcut.none":                      "Sem atalho",
+	"shortcut.clear":                     "Limpar",
+	"shortcut.hint":                      "Use Ctrl, Alt ou Super com uma tecla. O atalho carrega este perfil no perfil de memória selecionado enquanto a aplicação está aberta, incluindo na área de notificação.",
+	"shortcut.duplicate":                 "Este atalho já está atribuído a %s.",
+	"shortcut.unavailable":               "O atalho de %s está indisponível: %s",
+	"shortcut.busy":                      "O teclado está ocupado. Tente novamente quando a operação atual terminar.",
 	"settings.title":                     "Definições",
 	"action.close":                       "Fechar",
 	"settings.startup":                   "Iniciar automaticamente no arranque",

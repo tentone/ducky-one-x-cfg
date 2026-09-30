@@ -38,20 +38,22 @@ type UI struct {
 	client       *protocol.Client
 	profileStore *profiles.Store
 
-	devices        []device.Descriptor
-	deviceSelect   *widget.Select
-	connectButton  *widget.Button
-	profileSelect  *widget.Select
-	languageSelect *widget.Select
-	settingsDialog dialog.Dialog
-	autoSync       *widget.Check
-	status         *widget.Label
-	detail         *widget.Label
-	busy           bool
-	updating       bool
-	autoConnect    bool
-	done           chan struct{}
-	shutdown       func()
+	devices          []device.Descriptor
+	deviceSelect     *widget.Select
+	connectButton    *widget.Button
+	profileSelect    *widget.Select
+	languageSelect   *widget.Select
+	settingsDialog   dialog.Dialog
+	profileEditor    dialog.Dialog
+	profileShortcuts profileShortcutManager
+	autoSync         *widget.Check
+	status           *widget.Label
+	detail           *widget.Label
+	busy             bool
+	updating         bool
+	autoConnect      bool
+	done             chan struct{}
+	shutdown         func()
 
 	keys             keyControls
 	lighting         lightingControls
@@ -99,6 +101,9 @@ func Run(options Options) error {
 	var shutdownOnce sync.Once
 	u.shutdown = func() {
 		shutdownOnce.Do(func() {
+			if u.profileShortcuts != nil {
+				u.profileShortcuts.Close()
+			}
 			u.cancelAutoSync()
 			close(u.done)
 			if u.lighting.animator != nil {
@@ -116,6 +121,7 @@ func Run(options Options) error {
 	u.applySavedTheme()
 	u.window.Resize(fyne.NewSize(1120, 760))
 	u.window.SetContent(u.content())
+	u.initializeProfileShortcuts()
 	u.installLightingKeyInput()
 	u.refreshDevices()
 	u.startAutoDiscovery()
@@ -405,6 +411,9 @@ func (u *UI) readConfiguration(ctx context.Context, client *protocol.Client) (co
 }
 
 func (u *UI) applyConfiguration(snapshot configurationSnapshot) {
+	previousUpdating := u.updating
+	u.updating = true
+	defer func() { u.updating = previousUpdating }()
 	u.keys.updating = true
 	if snapshot.layer == 1 {
 		u.keys.layer.SetSelected(u.i18n.T("layer.fn"))

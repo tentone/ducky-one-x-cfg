@@ -41,15 +41,29 @@ func (u *UI) buildSoftwareProfiles() *softwareProfileControls {
 	controls.details.Wrapping = fyne.TextWrapWord
 	controls.list = widget.NewList(
 		func() int { return len(controls.profiles) },
-		func() fyne.CanvasObject { return widget.NewLabel("Profile") },
+		func() fyne.CanvasObject {
+			button := widget.NewButton("Profile", nil)
+			button.Alignment = widget.ButtonAlignLeading
+			button.Importance = widget.LowImportance
+			return button
+		},
 		func(id widget.ListItemID, object fyne.CanvasObject) {
 			if id < 0 || id >= len(controls.profiles) {
 				return
 			}
 			profile := controls.profiles[id]
-			object.(*widget.Label).SetText(fmt.Sprintf(
+			label := fmt.Sprintf(
 				"%s   ·   %s", profile.Name, profile.UpdatedAt.Local().Format("2006-01-02 15:04"),
-			))
+			)
+			if profile.Shortcut != "" {
+				label += "   ·   " + displayProfileShortcut(profile.Shortcut)
+			}
+			button := object.(*widget.Button)
+			button.SetText(label)
+			button.OnTapped = func() {
+				controls.list.Select(id)
+				u.openEditSoftwareProfile(profile.ID)
+			}
 		},
 	)
 	controls.list.OnSelected = func(id widget.ListItemID) {
@@ -67,7 +81,7 @@ func (u *UI) buildSoftwareProfiles() *softwareProfileControls {
 	controls.load = widget.NewButtonWithIcon(t("software_profiles.load"), theme.UploadIcon(), u.confirmLoadSoftwareProfile)
 	controls.load.Importance = widget.HighImportance
 	controls.update = widget.NewButtonWithIcon(t("software_profiles.update"), theme.ViewRefreshIcon(), u.confirmUpdateSoftwareProfile)
-	controls.rename = widget.NewButtonWithIcon(t("software_profiles.rename"), theme.DocumentCreateIcon(), u.openRenameSoftwareProfile)
+	controls.rename = widget.NewButtonWithIcon(t("software_profiles.edit"), theme.DocumentCreateIcon(), u.openRenameSoftwareProfile)
 	controls.delete = widget.NewButtonWithIcon(t("software_profiles.delete"), theme.DeleteIcon(), u.confirmDeleteSoftwareProfile)
 	controls.delete.Importance = widget.DangerImportance
 
@@ -225,9 +239,13 @@ func (u *UI) confirmLoadSoftwareProfile() {
 }
 
 func (u *UI) loadSoftwareProfile(profile profiles.Profile) {
+	u.loadSoftwareProfileWithFeedback(profile, false)
+}
+
+func (u *UI) loadSoftwareProfileWithFeedback(profile profiles.Profile, background bool) {
 	u.cancelAutoSync()
 	targetProfile := u.selectedMemoryProfile()
-	u.runProfileTask(func(ctx context.Context) (func(), error) {
+	u.runProfileTaskWithFeedback(func(ctx context.Context) (func(), error) {
 		if err := u.client.SetProfile(ctx, targetProfile); err != nil {
 			return nil, fmt.Errorf("select target memory profile: %w", err)
 		}
@@ -238,11 +256,15 @@ func (u *UI) loadSoftwareProfile(profile profiles.Profile) {
 			u.withoutAutoSync(func() {
 				u.applyConfiguration(u.configurationSnapshotFromProfile(profile.Configuration))
 			})
+			u.refreshSoftwareProfiles(profile.ID)
 			u.detail.SetText(fmt.Sprintf(
 				u.i18n.T("software_profiles.loaded_status"), profile.Name, u.profileSelect.Selected,
 			))
+			if background {
+				u.notifyProfileShortcut(u.detail.Text)
+			}
 		}, nil
-	})
+	}, background)
 }
 
 func (u *UI) openRenameSoftwareProfile() {
@@ -250,25 +272,7 @@ func (u *UI) openRenameSoftwareProfile() {
 	if !ok || u.busy {
 		return
 	}
-	entry := widget.NewEntry()
-	entry.SetText(profile.Name)
-	form := widget.NewForm(widget.NewFormItem(u.i18n.T("software_profiles.name"), entry))
-	modal := dialog.NewCustomConfirm(
-		u.i18n.T("software_profiles.rename"), u.i18n.T("software_profiles.rename_action"), u.i18n.T("action.cancel"), form,
-		func(confirmed bool) {
-			if !confirmed {
-				return
-			}
-			renamed, err := u.profileStore.Rename(profile.ID, entry.Text)
-			if err != nil {
-				u.showSoftwareProfileError(err)
-				return
-			}
-			u.refreshSoftwareProfiles(renamed.ID)
-		}, u.window,
-	)
-	modal.Resize(fyne.NewSize(440, 190))
-	modal.Show()
+	u.openEditSoftwareProfile(profile.ID)
 }
 
 func (u *UI) confirmDeleteSoftwareProfile() {
@@ -283,7 +287,7 @@ func (u *UI) confirmDeleteSoftwareProfile() {
 			if !confirmed {
 				return
 			}
-			if err := u.profileStore.Delete(profile.ID); err != nil {
+			if err := u.deleteSoftwareProfile(profile); err != nil {
 				u.showSoftwareProfileError(err)
 				return
 			}
@@ -320,11 +324,22 @@ func (u *UI) showSoftwareProfileError(err error) {
 }
 
 func (u *UI) runProfileTask(work func(context.Context) (func(), error)) {
+	u.runProfileTaskWithFeedback(work, false)
+}
+
+func (u *UI) runProfileTaskWithFeedback(work func(context.Context) (func(), error), background bool) {
 	if u.client == nil {
+		if background {
+			u.notifyProfileShortcut(u.i18n.T("error.no_device"))
+			return
+		}
 		dialog.ShowInformation(u.i18n.T("action.connect"), u.i18n.T("error.no_device"), u.window)
 		return
 	}
 	if u.busy {
+		if background {
+			u.notifyProfileShortcut(u.i18n.T("shortcut.busy"))
+		}
 		return
 	}
 	u.setBusy(true, u.i18n.T("software_profiles.working"))
@@ -335,6 +350,10 @@ func (u *UI) runProfileTask(work func(context.Context) (func(), error)) {
 		fyne.Do(func() {
 			u.setBusy(false, "")
 			if err != nil {
+				if background {
+					u.notifyProfileShortcut(err.Error())
+					return
+				}
 				u.showSoftwareProfileError(err)
 				return
 			}
