@@ -22,6 +22,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\ducky-config.exe
+SetupIconFile={#RepoRoot}\assets\ducky.ico
 CloseApplications=yes
 RestartApplications=no
 
@@ -36,7 +37,7 @@ Name: "{autoprograms}\Ducky One X Configurator"; Filename: "{app}\ducky-config.e
 Name: "{autodesktop}\Ducky One X Configurator"; Filename: "{app}\ducky-config.exe"; Tasks: desktopicon
 
 [Registry]
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DuckyOneXConfigurator"; ValueData: """{app}\ducky-config.exe"" --minimized"; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DuckyOneXConfigurator"; ValueData: """{app}\ducky-config.exe"" --autostart"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\ducky-config.exe"; Description: "Open Ducky One X Configurator"; Flags: nowait postinstall skipifsilent

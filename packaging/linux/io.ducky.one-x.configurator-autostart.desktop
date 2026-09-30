@@ -2,8 +2,9 @@
 Type=Application
 Name=Ducky One X Configurator
 Comment=Connect to a Ducky One X keyboard in the background
-Exec=/usr/bin/ducky-config --minimized
+Exec=/usr/bin/ducky-config --autostart
 Terminal=false
+Icon=io.ducky.one-x.configurator
 Hidden=false
 NoDisplay=true
 X-GNOME-Autostart-enabled=true

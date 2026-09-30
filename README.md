@@ -26,13 +26,19 @@ It is written in Go with Fyne and communicates directly with the keyboard's vend
 
 ## Installers
 
-The installers register the application to start at desktop login with `--minimized`. The app continues connecting to the keyboard in the background; use the tray icon to open it or quit it completely. Closing the main window hides it in the tray.
+The installers register the application to start at desktop login with `--autostart`. Use **Settings → Launch automatically on startup** to enable or disable this for your user account. The app continues connecting to the keyboard in the background; use the tray icon to open it or quit it completely. Closing the main window hides it in the tray.
 
 - **Windows:** run `./scripts/package-windows.ps1`. This creates `dist/Ducky-One-X-Configurator-Setup-<version>.exe` with Start menu and optional desktop shortcuts, a system-wide startup entry, and an uninstaller. Building requires Inno Setup 6.
 - **Linux:** run `sh ./scripts/package-linux.sh`. This creates both a Debian package and a generic `.tar.gz` installer bundle. The packages install the desktop entry, system-wide XDG autostart entry, and Ducky HID udev rule.
 - **macOS:** run `sh ./scripts/package-macos.sh` on a Mac. This creates a `.pkg` containing the application bundle and a system LaunchAgent. Set `MACOS_SIGN_IDENTITY` and `MACOS_INSTALLER_IDENTITY` when signed distribution is required.
 
 A normal shortcut launch opens the window. `ducky-config --minimized` starts directly in the system tray.
+
+Open **Settings** in the top bar or tray menu to choose the theme and language,
+or change automatic startup. Settings are saved immediately. Automatic startup
+opens the app in the tray at the next login; disabling it also suppresses existing
+installer startup entries for your account. On a source build, enabling startup
+registers the current executable, so use a permanent build rather than `go run`.
 
 ## Run from source
 
@@ -70,6 +76,14 @@ sudo udevadm trigger
 Reconnect the keyboard after installing the rule.
 
 ## Build
+
+The duck artwork in `assets/ducky.svg` is embedded in the GUI and tray. Generated
+PNG, ICO, and ICNS files supply the application and installer icons. Windows
+executable icon resources are checked in for amd64 and 386, so normal builds
+do not require an icon generator. After changing the SVG, run
+`go run ./scripts/generate-icons` to refresh the image files, then run
+`./scripts/generate-icons.ps1` on Windows with MinGW-w64 `windres` available
+to refresh the executable resources as well.
 
 Build for the current operating system:
 
@@ -109,4 +123,3 @@ go test ./...
  ## License
  - This is an independent project and is not affiliated with DuckyChannel International Co., Ltd.
  - Licensed under the MIT License. See [LICENSE](LICENSE) for details.
-

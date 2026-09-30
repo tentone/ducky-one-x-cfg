@@ -15,16 +15,19 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/joseferrao/ducky-drv/assets"
 	"github.com/joseferrao/ducky-drv/internal/device"
 	"github.com/joseferrao/ducky-drv/internal/i18n"
 	"github.com/joseferrao/ducky-drv/internal/profiles"
 	"github.com/joseferrao/ducky-drv/internal/protocol"
+	"github.com/joseferrao/ducky-drv/internal/startup"
 )
 
 const (
 	preferenceTheme    = "appearance.theme"
 	preferenceAutoSync = "keyboard.auto_sync"
 	preferenceLanguage = "appearance.language"
+	preferenceStartup  = "application.launch_on_startup"
 )
 
 type UI struct {
@@ -40,6 +43,7 @@ type UI struct {
 	connectButton  *widget.Button
 	profileSelect  *widget.Select
 	languageSelect *widget.Select
+	settingsDialog dialog.Dialog
 	autoSync       *widget.Check
 	status         *widget.Label
 	detail         *widget.Label
@@ -63,9 +67,17 @@ type UI struct {
 // Options controls desktop startup behavior.
 type Options struct {
 	StartMinimized bool
+	AutoStart      bool
 }
 
 func Run(options Options) error {
+	application := app.NewWithID("io.ducky.one-x.configurator")
+	// Installer startup entries from older versions used --minimized.
+	loginLaunch := options.AutoStart || (options.StartMinimized && startup.LegacyEnabled())
+	if loginLaunch && !application.Preferences().BoolWithFallback(preferenceStartup, true) {
+		application.Quit()
+		return nil
+	}
 	manager, err := device.NewManager()
 	if err != nil {
 		return err
@@ -75,7 +87,6 @@ func Run(options Options) error {
 		_ = manager.Close()
 		return err
 	}
-	application := app.NewWithID("io.ducky.one-x.configurator")
 	catalog := i18n.New()
 	catalog.SetLanguage(i18n.Language(application.Preferences().StringWithFallback(preferenceLanguage, string(i18n.English))))
 	u := &UI{
@@ -83,7 +94,8 @@ func Run(options Options) error {
 		i18n: catalog, manager: manager, profileStore: profileStore,
 		autoConnect: true, done: make(chan struct{}),
 	}
-	application.SetIcon(theme.ComputerIcon())
+	application.SetIcon(assets.AppIcon)
+	u.window.SetIcon(assets.AppIcon)
 	var shutdownOnce sync.Once
 	u.shutdown = func() {
 		shutdownOnce.Do(func() {
@@ -109,7 +121,7 @@ func Run(options Options) error {
 	u.startAutoDiscovery()
 	trayAvailable := u.configureSystemTray()
 	u.window.Show()
-	if options.StartMinimized && trayAvailable {
+	if (options.StartMinimized || options.AutoStart) && trayAvailable {
 		u.window.Hide()
 	}
 	application.Run()
@@ -131,10 +143,15 @@ func (u *UI) configureSystemTray() bool {
 		u.app.Quit()
 	})
 	quit.IsQuit = true
+	settings := fyne.NewMenuItem(u.i18n.T("settings.title"), func() {
+		u.window.Show()
+		u.window.RequestFocus()
+		u.openSettings()
+	})
 	desktopApp.SetSystemTrayMenu(fyne.NewMenu(
-		u.i18n.T("app.title"), show, fyne.NewMenuItemSeparator(), quit,
+		u.i18n.T("app.title"), show, settings, fyne.NewMenuItemSeparator(), quit,
 	))
-	desktopApp.SetSystemTrayIcon(theme.ComputerIcon())
+	desktopApp.SetSystemTrayIcon(assets.AppIcon)
 	desktopApp.SetSystemTrayWindow(u.window)
 	u.window.SetCloseIntercept(func() { u.window.Hide() })
 	return true
@@ -167,24 +184,14 @@ func (u *UI) content() fyne.CanvasObject {
 	t := u.i18n.T
 	title := widget.NewLabel(t("app.title"))
 	title.TextStyle = fyne.TextStyle{Bold: true}
+	logo := widget.NewIcon(theme.NewThemedResource(assets.Duck))
+	branding := container.NewHBox(container.NewGridWrap(fyne.NewSize(32, 32), logo), title)
 
 	refresh := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		u.autoConnect = true
 		u.refreshDevices()
 	})
 	refresh.Importance = widget.LowImportance
-	themeSelect := widget.NewSelect(
-		[]string{t("theme.system"), t("theme.light"), t("theme.dark")},
-		u.changeTheme,
-	)
-	themeSelect.SetSelected(u.themeLabel(u.app.Preferences().StringWithFallback(preferenceTheme, "system")))
-	languages := i18n.Languages()
-	languageNames := make([]string, len(languages))
-	for index, language := range languages {
-		languageNames[index] = i18n.NativeName(language)
-	}
-	u.languageSelect = widget.NewSelect(languageNames, u.changeLanguage)
-	u.languageSelect.SetSelected(i18n.NativeName(u.i18n.Language()))
 	u.autoSync = widget.NewCheck(t("auto_sync"), func(enabled bool) {
 		u.app.Preferences().SetBool(preferenceAutoSync, enabled)
 		if !enabled {
@@ -196,11 +203,10 @@ func (u *UI) content() fyne.CanvasObject {
 	preferences := container.NewHBox(
 		u.autoSync,
 		widget.NewLabel(t("profile")), compactControl(u.profileSelect, 112),
-		widget.NewLabel(t("theme")), compactControl(themeSelect, 96),
-		compactControl(u.languageSelect, 150),
+		widget.NewButtonWithIcon(t("settings.title"), theme.SettingsIcon(), u.openSettings),
 	)
 	deviceControls := container.NewHBox(compactControl(u.deviceSelect, 220), refresh, u.connectButton)
-	header := container.NewBorder(nil, nil, title, preferences, deviceControls)
+	header := container.NewBorder(nil, nil, branding, preferences, deviceControls)
 
 	lightingTab := container.NewTabItemWithIcon(t("tab.lighting"), theme.VisibilityIcon(), u.lighting.root)
 	tabs := container.NewAppTabs(
@@ -568,7 +574,9 @@ func (u *UI) changeLanguage(name string) {
 		return
 	}
 	if u.busy {
-		u.languageSelect.SetSelected(i18n.NativeName(u.i18n.Language()))
+		if u.languageSelect != nil {
+			u.languageSelect.SetSelected(i18n.NativeName(u.i18n.Language()))
+		}
 		return
 	}
 
@@ -589,6 +597,10 @@ func (u *UI) changeLanguage(name string) {
 	u.window.SetTitle(u.i18n.T("app.title"))
 	u.installLightingKeyInput()
 	u.configureSystemTray()
+	if u.settingsDialog != nil {
+		u.settingsDialog.Hide()
+		u.openSettings()
+	}
 }
 
 func languageFromNativeName(name string) (i18n.Language, bool) {

@@ -1,6 +1,10 @@
 package i18n
 
 var english = map[string]string{
+	"settings.title":                     "Settings",
+	"action.close":                       "Close",
+	"settings.startup":                   "Launch automatically on startup",
+	"settings.startup_hint":              "Starts in the system tray at your next login.",
 	"app.title":                          "Ducky One X Configurator",
 	"app.subtitle":                       "Offline keyboard configuration",
 	"action.apply":                       "Apply",

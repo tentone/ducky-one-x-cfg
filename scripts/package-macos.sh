@@ -19,6 +19,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$root/Library/LaunchAg
 cd "$repo_root"
 CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o "$app/Contents/MacOS/ducky-config" ./cmd/ducky-config
 sed "s/__VERSION__/$version/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
+cp assets/ducky.icns "$app/Contents/Resources/ducky.icns"
 cp packaging/macos/io.ducky.one-x.configurator.plist "$root/Library/LaunchAgents/"
 chmod 0755 "$app/Contents/MacOS/ducky-config"
 chmod 0644 "$app/Contents/Info.plist" "$root/Library/LaunchAgents/io.ducky.one-x.configurator.plist"

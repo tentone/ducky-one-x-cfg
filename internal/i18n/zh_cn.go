@@ -1,6 +1,10 @@
 package i18n
 
 var chineseSimplified = map[string]string{
+	"settings.title":                     "设置",
+	"action.close":                       "关闭",
+	"settings.startup":                   "开机时自动启动",
+	"settings.startup_hint":              "下次登录时在系统托盘中启动。",
 	"app.title":                          "Ducky One X 配置工具",
 	"app.subtitle":                       "离线键盘配置",
 	"action.apply":                       "应用",

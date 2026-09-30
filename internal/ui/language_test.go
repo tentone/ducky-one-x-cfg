@@ -35,8 +35,13 @@ func TestLanguageSwitchRebuildsUIAndPreservesEdits(t *testing.T) {
 	u.lighting.effect.SetSelected(effectName(21, u.i18n.T))
 	u.lighting.brightness.SetValue(75)
 	u.macros.actions = []protocol.MacroAction{{Kind: protocol.MacroText, Text: "test"}}
+	u.openSettings()
 
 	u.changeLanguage(i18n.NativeName(i18n.French))
+	if u.settingsDialog == nil || u.languageSelect.Selected != i18n.NativeName(i18n.French) {
+		t.Fatal("settings should remain open in the selected language")
+	}
+	u.settingsDialog.Hide()
 	if u.i18n.Language() != i18n.French {
 		t.Fatalf("active language = %q, want French", u.i18n.Language())
 	}

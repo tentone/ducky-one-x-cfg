@@ -7,6 +7,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 rm -f /usr/bin/ducky-config
+rm -f /usr/share/icons/hicolor/512x512/apps/io.ducky.one-x.configurator.png
 rm -f /usr/share/applications/io.ducky.one-x.configurator.desktop
 rm -f /etc/xdg/autostart/io.ducky.one-x.configurator.desktop
 rm -f /etc/udev/rules.d/99-ducky-one-x.rules

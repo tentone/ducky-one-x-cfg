@@ -4,5 +4,6 @@ Name=Ducky One X Configurator
 Comment=Configure a Ducky One X keyboard locally
 Exec=/usr/bin/ducky-config
 Terminal=false
+Icon=io.ducky.one-x.configurator
 Categories=Settings;HardwareSettings;
 StartupNotify=true

@@ -6,6 +6,8 @@
     <string>Ducky One X Configurator</string>
     <key>CFBundleExecutable</key>
     <string>ducky-config</string>
+    <key>CFBundleIconFile</key>
+    <string>ducky.icns</string>
     <key>CFBundleIdentifier</key>
     <string>io.ducky.one-x.configurator</string>
     <key>CFBundleName</key>

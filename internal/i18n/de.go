@@ -1,6 +1,10 @@
 package i18n
 
 var german = map[string]string{
+	"settings.title":                     "Einstellungen",
+	"action.close":                       "Schließen",
+	"settings.startup":                   "Beim Anmelden automatisch starten",
+	"settings.startup_hint":              "Startet bei der nächsten Anmeldung im Infobereich.",
 	"app.title":                          "Ducky One X Konfigurator",
 	"app.subtitle":                       "Offline-Tastaturkonfiguration",
 	"action.apply":                       "Übernehmen",

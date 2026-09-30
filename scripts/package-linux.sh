@@ -18,6 +18,7 @@ cp packaging/linux/io.ducky.one-x.configurator.desktop "$bundle/"
 cp packaging/linux/io.ducky.one-x.configurator-autostart.desktop "$bundle/"
 cp packaging/linux/install.sh packaging/linux/uninstall.sh "$bundle/"
 cp packaging/99-ducky-one-x.rules "$bundle/"
+cp assets/ducky.png "$bundle/"
 chmod 0755 "$bundle/ducky-config" "$bundle/install.sh" "$bundle/uninstall.sh"
 
 tar -C "$bundle" -czf "$dist/ducky-one-x-configurator-$version-linux.tar.gz" .
@@ -26,6 +27,7 @@ echo "Built dist/ducky-one-x-configurator-$version-linux.tar.gz"
 if command -v dpkg-deb >/dev/null 2>&1; then
     arch=$(dpkg --print-architecture)
     install -m 0755 "$bundle/ducky-config" "$debroot/usr/bin/ducky-config"
+    install -D -m 0644 "$bundle/ducky.png" "$debroot/usr/share/icons/hicolor/512x512/apps/io.ducky.one-x.configurator.png"
     install -m 0644 "$bundle/io.ducky.one-x.configurator.desktop" "$debroot/usr/share/applications/io.ducky.one-x.configurator.desktop"
     install -m 0644 "$bundle/io.ducky.one-x.configurator-autostart.desktop" "$debroot/etc/xdg/autostart/io.ducky.one-x.configurator.desktop"
     install -m 0644 "$bundle/99-ducky-one-x.rules" "$debroot/etc/udev/rules.d/99-ducky-one-x.rules"

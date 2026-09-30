@@ -1,6 +1,10 @@
 package i18n
 
 var french = map[string]string{
+	"settings.title":                     "Paramètres",
+	"action.close":                       "Fermer",
+	"settings.startup":                   "Lancer automatiquement au démarrage",
+	"settings.startup_hint":              "Démarre dans la zone de notification à la prochaine connexion.",
 	"app.title":                          "Configurateur Ducky One X",
 	"app.subtitle":                       "Configuration hors ligne du clavier",
 	"action.apply":                       "Appliquer",

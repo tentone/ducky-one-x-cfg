@@ -1,6 +1,10 @@
 package i18n
 
 var portuguesePortugal = map[string]string{
+	"settings.title":                     "Definições",
+	"action.close":                       "Fechar",
+	"settings.startup":                   "Iniciar automaticamente no arranque",
+	"settings.startup_hint":              "Inicia na área de notificação no próximo início de sessão.",
 	"app.title":                          "Configurador Ducky One X",
 	"app.subtitle":                       "Configuração local do teclado",
 	"action.apply":                       "Aplicar",

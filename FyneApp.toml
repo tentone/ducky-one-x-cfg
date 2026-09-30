@@ -1,4 +1,5 @@
 [Details]
+Icon = "assets/ducky.png"
 Name = "Ducky One X Configurator"
 ID = "io.ducky.one-x.configurator"
 Version = "0.1.0"
