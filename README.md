@@ -19,7 +19,10 @@ It is written in Go with Fyne and communicates directly with the keyboard's vend
 - Live language switching with English, French, German, European Portuguese, and Simplified Chinese
 - System-tray operation with close-to-tray behavior and an installer-managed start-at-login mode
 
-The protocol was translated from the saved Ducky One X web configurator in `webapp_snapshot`. Runtime code does not load anything from that snapshot or contact `duckyhub.io`.
+
+<img src="readme/keys.png" width="400"/>
+<img src="readme/lighting.png" width="400"/>
+<img src="readme/profiles.png" width="400"/>
 
 ## Installers
 
@@ -98,8 +101,12 @@ go test ./...
 
 ## Safety and hardware scope
 
-The application only enumerates HID interfaces with Ducky's vendor ID `0x3233` and configuration usage page `0x008c`.
-Writes are serialized and responses are matched to the expected command. Settings still change persistent keyboard memory, so test new macro and analog settings before relying on them in critical workflows.
-Software profiles are saved as `profiles.json` under the operating system's per-user configuration directory. Each entry contains both key layers, lighting, actuation, all MPT presets, and all macro slots.
-This is an independent project and is not affiliated with DuckyChannel International Co., Ltd.
-See [docs/protocol.md](docs/protocol.md) for the implemented command map and [docs/architecture.md](docs/architecture.md) for the code layout.
+ - The application only enumerates HID interfaces with Ducky's vendor ID `0x3233` and configuration usage page `0x008c`.
+ - Writes are serialized and responses are matched to the expected command. Settings still change persistent keyboard memory, so test new macro and analog settings before relying on them in critical workflows.
+ - Software profiles are saved as `profiles.json` under the operating system's per-user configuration directory. Each entry contains both key layers, lighting, actuation, all MPT presets, and all macro slots.
+ - See [docs/protocol.md](docs/protocol.md) for the implemented command map and [docs/architecture.md](docs/architecture.md) for the code layout.
+
+ ## License
+ - This is an independent project and is not affiliated with DuckyChannel International Co., Ltd.
+ - Licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
