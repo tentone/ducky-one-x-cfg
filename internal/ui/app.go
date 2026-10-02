@@ -59,7 +59,7 @@ type UI struct {
 	lighting         lightingControls
 	actuation        actuationControls
 	mpt              mptControls
-	macros           macroControls
+	macros           *macroControls
 	debug            debugControls
 	softwareProfiles *softwareProfileControls
 
@@ -488,7 +488,7 @@ func (u *UI) clearLoadedState() {
 	u.actuation.mode.SetText("—")
 	u.updateActuationKeyboard(&u.actuation)
 	u.macros.actions = nil
-	u.macros.list.Refresh()
+	u.macros.list.UnselectAll()
 	u.clearDebugState()
 }
 
@@ -695,7 +695,7 @@ func (u *UI) restoreLocalizedUIState(state localizedUIState) {
 	}
 	u.macros.actions = state.macroActions
 	u.macros.selected = -1
-	u.macros.list.Refresh()
+	u.macros.list.UnselectAll()
 	u.refreshSoftwareProfiles(state.softwareProfileID)
 
 	u.updating = true

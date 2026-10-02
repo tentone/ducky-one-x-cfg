@@ -19,14 +19,15 @@ type macroControls struct {
 	kind     *widget.Select
 	key      *widget.Select
 	value    *widget.Entry
-	list     *widget.List
+	update   *widget.Button
+	list     *macroActionList
 	actions  []protocol.MacroAction
 	selected widget.ListItemID
 }
 
-func (u *UI) buildMacros() macroControls {
+func (u *UI) buildMacros() *macroControls {
 	t := u.i18n.T
-	controls := macroControls{selected: -1}
+	controls := &macroControls{selected: -1}
 	slots := make([]string, protocol.MacroSlots)
 	for i := range slots {
 		slots[i] = fmt.Sprintf("M%d", i+1)
@@ -51,34 +52,75 @@ func (u *UI) buildMacros() macroControls {
 	}
 	controls.value.Disable()
 
-	controls.list = widget.NewList(
-		func() int { return len(controls.actions) },
-		func() fyne.CanvasObject { return widget.NewLabel("Macro action") },
-		func(id widget.ListItemID, object fyne.CanvasObject) {
-			if id >= 0 && id < len(controls.actions) {
-				object.(*widget.Label).SetText(fmt.Sprintf("%02d  %s", id+1, controls.actions[id].Description()))
-			}
-		},
-	)
-	controls.list.OnSelected = func(id widget.ListItemID) { controls.selected = id }
-	controls.list.OnUnselected = func(widget.ListItemID) { controls.selected = -1 }
-
 	var autoApply func()
+	var update, remove *widget.Button
+	selectAction := func(id int) {
+		controls.selected = id
+		if id < 0 || id >= len(controls.actions) {
+			update.Disable()
+			remove.Disable()
+			return
+		}
+		action := controls.actions[id]
+		controls.kind.SetSelected(t(macroKindID(action.Kind)))
+		switch action.Kind {
+		case protocol.MacroDelay:
+			controls.value.SetText(strconv.Itoa(action.DelayMS))
+		case protocol.MacroText:
+			controls.value.SetText(action.Text)
+		default:
+			if len(action.Keys) > 0 {
+				controls.key.SetSelected(protocol.KeyName(action.Keys[0]))
+			}
+		}
+		update.Enable()
+		remove.Enable()
+	}
+	controls.list = newMacroActionList(controls, t, selectAction, func() {
+		if autoApply != nil {
+			autoApply()
+		}
+	})
 	add := widget.NewButtonWithIcon(t("action.add"), theme.ContentAddIcon(), func() {
-		action, ok := macroActionFromInputs(&controls, t)
+		action, ok := macroActionFromInputs(controls, t)
 		if !ok {
 			dialog.ShowInformation(t("error.invalid"), t("error.invalid"), u.window)
 			return
 		}
 		controls.actions = append(controls.actions, action)
+		selectAction(len(controls.actions) - 1)
 		controls.list.Refresh()
 		controls.list.ScrollToBottom()
-		controls.value.SetText("")
 		if autoApply != nil {
 			autoApply()
 		}
 	})
-	remove := widget.NewButtonWithIcon(t("action.remove"), theme.ContentRemoveIcon(), func() {
+	update = widget.NewButtonWithIcon(t("macro.update"), theme.ConfirmIcon(), func() {
+		id := controls.selected
+		if id < 0 || id >= len(controls.actions) {
+			return
+		}
+		action, ok := macroActionFromInputs(controls, t)
+		if !ok {
+			dialog.ShowInformation(t("error.invalid"), t("error.invalid"), u.window)
+			return
+		}
+		previous := controls.actions[id]
+		// Keep firmware fields that this editor does not change.
+		if action.Kind == protocol.MacroDelay && previous.Kind == protocol.MacroDelay {
+			action.RandomMS = previous.RandomMS
+		}
+		if len(action.Keys) > 0 && len(previous.Keys) > 0 && action.Keys[0] == previous.Keys[0] {
+			action.Keys = append([]byte(nil), previous.Keys...)
+		}
+		controls.actions[id] = action
+		controls.list.Refresh()
+		if autoApply != nil {
+			autoApply()
+		}
+	})
+	controls.update = update
+	remove = widget.NewButtonWithIcon(t("action.remove"), theme.ContentRemoveIcon(), func() {
 		if controls.selected < 0 || controls.selected >= len(controls.actions) {
 			return
 		}
@@ -91,6 +133,7 @@ func (u *UI) buildMacros() macroControls {
 			autoApply()
 		}
 	})
+	selectAction(-1)
 
 	load := widget.NewButtonWithIcon(t("action.load"), theme.DownloadIcon(), func() {
 		slot := macroSlot(controls.slot.Selected)
@@ -102,6 +145,7 @@ func (u *UI) buildMacros() macroControls {
 			return func() {
 				controls.actions = actions
 				controls.selected = -1
+				controls.list.UnselectAll()
 				controls.list.Refresh()
 				u.detail.SetText(t("status.loaded"))
 			}, nil
@@ -135,6 +179,7 @@ func (u *UI) buildMacros() macroControls {
 				}
 				return func() {
 					controls.actions = nil
+					controls.list.UnselectAll()
 					controls.list.Refresh()
 					u.detail.SetText(t("status.reset"))
 				}, nil
@@ -143,16 +188,28 @@ func (u *UI) buildMacros() macroControls {
 	})
 	clear.Importance = widget.DangerImportance
 
-	editor := widget.NewCard(t("action.add"), "", widget.NewForm(
+	editor := widget.NewCard(t("macro.edit"), "", widget.NewForm(
 		widget.NewFormItem(t("macro.kind"), controls.kind),
 		widget.NewFormItem(t("output.key"), controls.key),
 		widget.NewFormItem(t("macro.value"), controls.value),
-		widget.NewFormItem("", container.NewHBox(add, remove)),
+		widget.NewFormItem("", container.NewHBox(update, remove)),
 	))
+	paletteHint := widget.NewLabel(t("macro.palette"))
+	paletteHint.Wrapping = fyne.TextWrapWord
+	palette := container.NewVBox(paletteHint)
+	for _, kind := range []protocol.MacroActionKind{protocol.MacroClick, protocol.MacroPress, protocol.MacroRelease, protocol.MacroDelay, protocol.MacroText} {
+		kind := kind
+		palette.Add(newMacroDragItem(t(macroKindID(kind)), func() {
+			controls.list.insert(kind, len(controls.actions))
+			controls.list.ScrollToBottom()
+		}, func(pos fyne.Position, end bool) {
+			controls.list.drag(kind, -1, pos, end)
+		}))
+	}
 	description := widget.NewLabel(t("macro.description"))
 	description.Wrapping = fyne.TextWrapWord
 	toolbar := container.NewBorder(nil, nil, container.NewHBox(widget.NewLabel(t("macro.slot")), controls.slot), nil, container.NewHBox(load, save, clear))
-	editorScroll := container.NewVScroll(container.NewPadded(editor))
+	editorScroll := container.NewVScroll(container.NewPadded(container.NewVBox(palette, widget.NewSeparator(), editor, add)))
 	workspace := container.NewHSplit(container.NewPadded(controls.list), editorScroll)
 	workspace.Offset = 0.62
 	controls.root = container.NewBorder(
