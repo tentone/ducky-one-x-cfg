@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/tentone/ducky-drv/internal/protocol"
@@ -34,6 +35,7 @@ type lightingControls struct {
 	patternRow fyne.CanvasObject
 	directRow  fyne.CanvasObject
 	paintRow   fyne.CanvasObject
+	imageRow   fyne.CanvasObject
 	updating   bool
 }
 
@@ -177,20 +179,60 @@ func (u *UI) buildLighting() lightingControls {
 	paintHint := widget.NewLabel(t("lighting.paint_hint"))
 	paintHint.Wrapping = fyne.TextWrapWord
 	clearPaint := widget.NewButtonWithIcon(t("action.clear_keys"), theme.DeleteIcon(), func() {
-		controls.keyColors = make(map[int]color.NRGBA)
+		clear(controls.keyColors)
 		controls.animator.SetCustomColors(controls.keyColors)
 		if autoApplyLighting != nil {
 			autoApplyLighting()
 		}
 	})
 	controls.paintRow = lightingSettingRow(t("lighting.paint"), container.NewBorder(nil, nil, nil, clearPaint, paintHint))
+	importImage := widget.NewButtonWithIcon(t("lighting.import_image"), theme.FolderOpenIcon(), func() {
+		picker := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, u.window)
+				return
+			}
+			if reader == nil {
+				return
+			}
+			go func() {
+				defer reader.Close()
+				colors, err := decodeLightingImage(reader)
+				fyne.Do(func() {
+					// Language changes rebuild the tab while decoding may still be running.
+					if u.lighting.animator != controls.animator {
+						return
+					}
+					if err != nil {
+						dialog.ShowError(fmt.Errorf("%s: %w", t("lighting.image_error"), err), u.window)
+						return
+					}
+					controls.updating = true
+					clear(controls.keyColors)
+					for index, keyColor := range colors {
+						controls.keyColors[index] = keyColor
+					}
+					controls.animator.SetCustomColors(colors)
+					controls.effect.SetSelected(effectName(protocol.CustomStaticLightingEffect, t))
+					controls.updating = false
+					u.updateLightingVisibility(&controls)
+					updateAnimation()
+				})
+			}()
+		}, u.window)
+		picker.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".jpg", ".jpeg", ".gif"}))
+		picker.Show()
+	})
+	imageHint := widget.NewLabel(t("lighting.image_hint"))
+	imageHint.Wrapping = fyne.TextWrapWord
+	controls.imageRow = lightingSettingRow(t("lighting.image"), container.NewBorder(nil, nil, nil, importImage, imageHint))
 	effectRow := lightingSettingRow(t("effect"), container.NewGridWrap(fyne.NewSize(210, 36), controls.effect))
 
 	description := widget.NewLabel(t("lighting.description"))
 	description.Wrapping = fyne.TextWrapWord
 	keyboardCard := widget.NewCard(t("tab.lighting"), "", controls.keyboard.CanvasObject())
 	settingsCard := widget.NewCard(t("effect"), "", container.NewVBox(
-		effectRow, controls.colorRow, controls.paintRow, controls.brightRow, controls.speedRow, controls.patternRow, controls.directRow,
+		effectRow, controls.imageRow, controls.colorRow, controls.paintRow, controls.brightRow, controls.speedRow, controls.patternRow, controls.directRow,
 	))
 	controls.root = container.NewBorder(
 		container.NewVBox(description, widget.NewSeparator()),
@@ -215,6 +257,7 @@ func (u *UI) updateLightingVisibility(controls *lightingControls) {
 	setVisible(controls.patternRow, effect == 21)
 	setVisible(controls.directRow, effect == 21)
 	setVisible(controls.paintRow, effect == protocol.CustomStaticLightingEffect)
+	setVisible(controls.imageRow, effect == protocol.CustomStaticLightingEffect)
 }
 
 func setVisible(object fyne.CanvasObject, visible bool) {
@@ -267,7 +310,12 @@ func customLightingFromControls(controls *lightingControls) protocol.CustomLight
 
 func (u *UI) setCustomLighting(controls *lightingControls, settings protocol.CustomLightingSettings) {
 	u.withoutAutoSync(func() {
-		controls.keyColors = make(map[int]color.NRGBA, len(settings.Colors))
+		// Keep the shared map used by the tab's callbacks and saved UI state.
+		if controls.keyColors == nil {
+			controls.keyColors = make(map[int]color.NRGBA, len(settings.Colors))
+		} else {
+			clear(controls.keyColors)
+		}
 		for _, keyColor := range settings.Colors {
 			controls.keyColors[int(keyColor.Key)] = color.NRGBA{
 				R: keyColor.Red, G: keyColor.Green, B: keyColor.Blue, A: 255,

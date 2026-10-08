@@ -1,6 +1,10 @@
 package i18n
 
 var chineseSimplified = map[string]string{
+	"lighting.image":                     "图片",
+	"lighting.import_image":              "上传图片",
+	"lighting.image_hint":                "将 PNG、JPEG 或 GIF 图片映射到按键以生成自定义灯光。透明区域关闭灯光；GIF 使用第一帧。之后可为单个按键着色。",
+	"lighting.image_error":               "无法导入图片",
 	"software_profiles.save":             "保存配置文件",
 	"software_profiles.edit":             "编辑配置文件",
 	"shortcut.label":                     "加载快捷键",

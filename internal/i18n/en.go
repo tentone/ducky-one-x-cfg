@@ -1,6 +1,10 @@
 package i18n
 
 var english = map[string]string{
+	"lighting.image":                     "Image",
+	"lighting.import_image":              "Upload image",
+	"lighting.image_hint":                "Fit a PNG, JPEG, or GIF across the keys as custom lighting. Transparent areas turn lights off; GIFs use the first frame. You can then paint individual keys.",
+	"lighting.image_error":               "Could not import image",
 	"software_profiles.save":             "Save profile",
 	"software_profiles.edit":             "Edit profile",
 	"shortcut.label":                     "Load shortcut",

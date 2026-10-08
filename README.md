@@ -13,6 +13,7 @@ It is written in Go with Fyne and communicates directly with the keyboard's vend
 - Assign global shortcuts to software profiles and load them while the app is in the tray
 - Visual full-size keyboard with click-to-edit Base and Fn key assignments
 - Interactive lighting previews driven by physical key presses: single-key reactive pulses, press-centered ripple, three directional rainbow patterns, a full-key analog light bar, and per-key color painting
+- Import an image as custom per-key lighting, with a keyboard preview and individual color adjustments
 - Per-key actuation overlays, click feedback, and rapid-trigger settings across all 126 matrix positions
 - Four-stage multi-point-trigger presets (MPT1–MPT14)
 - Fourteen onboard macro slots with press, release, click, delay, and text actions
@@ -40,6 +41,16 @@ or change automatic startup. Settings are saved immediately. Automatic startup
 opens the app in the tray at the next login; disabling it also suppresses existing
 installer startup entries for your account. On a source build, enabling startup
 registers the current executable, so use a permanent build rather than `go run`.
+
+## Image lighting
+
+In **Lighting**, select the **Custom / per-key** effect and choose **Upload image** to turn a local PNG, JPEG, or GIF into
+custom per-key lighting. The image is fitted across the full keyboard layout;
+each key receives the average color of its area. Transparent areas are unlit,
+and GIFs use the first frame. Adjust brightness or paint individual keys in the
+preview, then click **Apply** (or enable **Auto sync**). Import replaces the
+current custom colors. Images are processed locally, with limits of 32 MB and
+20 million pixels.
 
 ## Run from source
 

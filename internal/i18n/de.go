@@ -1,6 +1,10 @@
 package i18n
 
 var german = map[string]string{
+	"lighting.image":                     "Bild",
+	"lighting.import_image":              "Bild hochladen",
+	"lighting.image_hint":                "Ein PNG, JPEG oder GIF wird als benutzerdefinierte Beleuchtung auf die Tasten verteilt. Transparente Bereiche schalten das Licht aus; bei GIFs wird das erste Bild verwendet. Danach können Sie einzelne Tasten bemalen.",
+	"lighting.image_error":               "Bild konnte nicht importiert werden",
 	"software_profiles.save":             "Profil speichern",
 	"software_profiles.edit":             "Profil bearbeiten",
 	"shortcut.label":                     "Tastenkürzel zum Laden",
