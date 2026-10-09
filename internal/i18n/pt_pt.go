@@ -3,7 +3,10 @@ package i18n
 var portuguesePortugal = map[string]string{
 	"lighting.image":                     "Imagem",
 	"lighting.import_image":              "Carregar imagem",
-	"lighting.image_hint":                "Ajuste um PNG, JPEG ou GIF às teclas como iluminação personalizada. As áreas transparentes apagam as luzes; os GIF usam a primeira imagem. Depois pode pintar teclas individuais.",
+	"lighting.image_hint":                "Ajuste um PNG, JPEG ou GIF às teclas. Os GIF são reproduzidos automaticamente, mesmo na área de notificação, e enviam cada imagem ao teclado. Pare a animação para pintar teclas. As áreas transparentes apagam as luzes.",
+	"lighting.gif_stop":                  "Parar animação",
+	"lighting.gif_speed":                 "Velocidade de reprodução",
+	"lighting.gif_error":                 "Reprodução do GIF interrompida",
 	"lighting.image_error":               "Não foi possível importar a imagem",
 	"software_profiles.save":             "Guardar perfil",
 	"software_profiles.edit":             "Editar perfil",

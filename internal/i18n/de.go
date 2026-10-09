@@ -3,7 +3,10 @@ package i18n
 var german = map[string]string{
 	"lighting.image":                     "Bild",
 	"lighting.import_image":              "Bild hochladen",
-	"lighting.image_hint":                "Ein PNG, JPEG oder GIF wird als benutzerdefinierte Beleuchtung auf die Tasten verteilt. Transparente Bereiche schalten das Licht aus; bei GIFs wird das erste Bild verwendet. Danach können Sie einzelne Tasten bemalen.",
+	"lighting.image_hint":                "Verteilen Sie ein PNG, JPEG oder GIF auf die Tasten. GIFs werden automatisch abgespielt, auch im Infobereich, und jedes Bild wird an die Tastatur gesendet. Stoppen Sie die Wiedergabe, um Tasten zu bemalen. Transparente Bereiche schalten das Licht aus.",
+	"lighting.gif_stop":                  "Animation stoppen",
+	"lighting.gif_speed":                 "Wiedergabegeschwindigkeit",
+	"lighting.gif_error":                 "GIF-Wiedergabe gestoppt",
 	"lighting.image_error":               "Bild konnte nicht importiert werden",
 	"software_profiles.save":             "Profil speichern",
 	"software_profiles.edit":             "Profil bearbeiten",

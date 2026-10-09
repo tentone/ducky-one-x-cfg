@@ -3,7 +3,10 @@ package i18n
 var french = map[string]string{
 	"lighting.image":                     "Image",
 	"lighting.import_image":              "Importer une image",
-	"lighting.image_hint":                "Adaptez un PNG, JPEG ou GIF aux touches pour un éclairage personnalisé. Les zones transparentes éteignent les lumières ; les GIF utilisent la première image. Vous pouvez ensuite colorer chaque touche.",
+	"lighting.image_hint":                "Adaptez un PNG, JPEG ou GIF aux touches. Les GIF se lisent automatiquement, même dans la zone de notification, et envoient chaque image au clavier. Arrêtez la lecture pour colorer les touches. Les zones transparentes éteignent les lumières.",
+	"lighting.gif_stop":                  "Arrêter l’animation",
+	"lighting.gif_speed":                 "Vitesse de lecture",
+	"lighting.gif_error":                 "Lecture du GIF arrêtée",
 	"lighting.image_error":               "Impossible d’importer l’image",
 	"software_profiles.save":             "Enregistrer le profil",
 	"software_profiles.edit":             "Modifier le profil",

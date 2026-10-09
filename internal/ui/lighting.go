@@ -16,27 +16,30 @@ import (
 )
 
 type lightingControls struct {
-	root       fyne.CanvasObject
-	effect     *widget.Select
-	speed      *widget.Slider
-	brightness *widget.Slider
-	pattern    *widget.Select
-	direction  *widget.Select
-	red        byte
-	green      byte
-	blue       byte
-	preview    *canvas.Rectangle
-	keyboard   *KeyboardView
-	animator   *LightingAnimator
-	keyColors  map[int]color.NRGBA
-	colorRow   fyne.CanvasObject
-	speedRow   fyne.CanvasObject
-	brightRow  fyne.CanvasObject
-	patternRow fyne.CanvasObject
-	directRow  fyne.CanvasObject
-	paintRow   fyne.CanvasObject
-	imageRow   fyne.CanvasObject
-	updating   bool
+	root        fyne.CanvasObject
+	effect      *widget.Select
+	speed       *widget.Slider
+	brightness  *widget.Slider
+	pattern     *widget.Select
+	direction   *widget.Select
+	red         byte
+	green       byte
+	blue        byte
+	preview     *canvas.Rectangle
+	keyboard    *KeyboardView
+	animator    *LightingAnimator
+	keyColors   map[int]color.NRGBA
+	colorRow    fyne.CanvasObject
+	speedRow    fyne.CanvasObject
+	brightRow   fyne.CanvasObject
+	patternRow  fyne.CanvasObject
+	directRow   fyne.CanvasObject
+	paintRow    fyne.CanvasObject
+	imageRow    fyne.CanvasObject
+	stopGIF     *widget.Button
+	gifSpeed    *widget.Slider
+	gifSpeedRow fyne.CanvasObject
+	updating    bool
 }
 
 var lightingEffects = []struct {
@@ -54,6 +57,7 @@ func (u *UI) buildLighting() lightingControls {
 	var autoApplyLighting func()
 	controls.keyboard = NewKeyboardView(func(index int) {
 		if controls.effect != nil && effectCode(controls.effect.Selected, t) == protocol.CustomStaticLightingEffect {
+			u.stopLightingGIF()
 			controls.keyColors[index] = color.NRGBA{R: controls.red, G: controls.green, B: controls.blue, A: 255}
 			controls.animator.SetCustomColors(controls.keyColors)
 			if autoApplyLighting != nil {
@@ -105,6 +109,9 @@ func (u *UI) buildLighting() lightingControls {
 		if controls.updating {
 			return
 		}
+		if effectCode(controls.effect.Selected, t) != protocol.CustomStaticLightingEffect {
+			u.stopLightingGIF()
+		}
 		u.updateLightingVisibility(&controls)
 		updateAnimation()
 	}
@@ -126,6 +133,7 @@ func (u *UI) buildLighting() lightingControls {
 	})
 
 	load := widget.NewButtonWithIcon(t("action.load"), theme.DownloadIcon(), func() {
+		u.stopLightingGIF()
 		u.run(func(ctx context.Context) (func(), error) {
 			settings, err := u.client.Lighting(ctx)
 			if err != nil {
@@ -164,6 +172,9 @@ func (u *UI) buildLighting() lightingControls {
 		writeLighting(lightingSettingsFromControls(&controls, t), customLightingFromControls(&controls))
 	}
 	autoApplyLighting = func() {
+		if u.lightingGIF != nil {
+			return
+		}
 		settings := lightingSettingsFromControls(&controls, t)
 		custom := customLightingFromControls(&controls)
 		u.scheduleAutoSync("lighting", func() { writeLighting(settings, custom) })
@@ -179,6 +190,7 @@ func (u *UI) buildLighting() lightingControls {
 	paintHint := widget.NewLabel(t("lighting.paint_hint"))
 	paintHint.Wrapping = fyne.TextWrapWord
 	clearPaint := widget.NewButtonWithIcon(t("action.clear_keys"), theme.DeleteIcon(), func() {
+		u.stopLightingGIF()
 		clear(controls.keyColors)
 		controls.animator.SetCustomColors(controls.keyColors)
 		if autoApplyLighting != nil {
@@ -197,7 +209,7 @@ func (u *UI) buildLighting() lightingControls {
 			}
 			go func() {
 				defer reader.Close()
-				colors, err := decodeLightingImage(reader)
+				animation, err := decodeLightingAnimation(reader)
 				fyne.Do(func() {
 					// Language changes rebuild the tab while decoding may still be running.
 					if u.lighting.animator != controls.animator {
@@ -207,6 +219,11 @@ func (u *UI) buildLighting() lightingControls {
 						dialog.ShowError(fmt.Errorf("%s: %w", t("lighting.image_error"), err), u.window)
 						return
 					}
+					if effectCode(controls.effect.Selected, t) != protocol.CustomStaticLightingEffect {
+						return
+					}
+					u.stopLightingGIF()
+					colors := animation.frames[0].colors
 					controls.updating = true
 					clear(controls.keyColors)
 					for index, keyColor := range colors {
@@ -216,7 +233,11 @@ func (u *UI) buildLighting() lightingControls {
 					controls.effect.SetSelected(effectName(protocol.CustomStaticLightingEffect, t))
 					controls.updating = false
 					u.updateLightingVisibility(&controls)
-					updateAnimation()
+					if len(animation.frames) > 1 {
+						u.startLightingGIF(animation)
+					} else {
+						updateAnimation()
+					}
 				})
 			}()
 		}, u.window)
@@ -225,14 +246,28 @@ func (u *UI) buildLighting() lightingControls {
 	})
 	imageHint := widget.NewLabel(t("lighting.image_hint"))
 	imageHint.Wrapping = fyne.TextWrapWord
-	controls.imageRow = lightingSettingRow(t("lighting.image"), container.NewBorder(nil, nil, nil, importImage, imageHint))
+	controls.stopGIF = widget.NewButtonWithIcon(t("lighting.gif_stop"), theme.MediaStopIcon(), u.stopLightingGIF)
+	controls.stopGIF.Hide()
+	controls.gifSpeed = widget.NewSlider(0.25, 4)
+	controls.gifSpeed.Step = 0.25
+	controls.gifSpeed.SetValue(1)
+	gifSpeedValue := widget.NewLabel("1.00×")
+	controls.gifSpeed.OnChanged = func(speed float64) {
+		gifSpeedValue.SetText(fmt.Sprintf("%.2f×", speed))
+		if !controls.updating {
+			u.changeLightingGIFSpeed()
+		}
+	}
+	controls.gifSpeedRow = lightingSettingRow(t("lighting.gif_speed"), container.NewBorder(nil, nil, nil, gifSpeedValue, controls.gifSpeed))
+	controls.gifSpeedRow.Hide()
+	controls.imageRow = lightingSettingRow(t("lighting.image"), container.NewBorder(nil, nil, nil, container.NewVBox(importImage, controls.stopGIF), imageHint))
 	effectRow := lightingSettingRow(t("effect"), container.NewGridWrap(fyne.NewSize(210, 36), controls.effect))
 
 	description := widget.NewLabel(t("lighting.description"))
 	description.Wrapping = fyne.TextWrapWord
 	keyboardCard := widget.NewCard(t("tab.lighting"), "", controls.keyboard.CanvasObject())
 	settingsCard := widget.NewCard(t("effect"), "", container.NewVBox(
-		effectRow, controls.imageRow, controls.colorRow, controls.paintRow, controls.brightRow, controls.speedRow, controls.patternRow, controls.directRow,
+		effectRow, controls.imageRow, controls.gifSpeedRow, controls.colorRow, controls.paintRow, controls.brightRow, controls.speedRow, controls.patternRow, controls.directRow,
 	))
 	controls.root = container.NewBorder(
 		container.NewVBox(description, widget.NewSeparator()),
@@ -309,6 +344,7 @@ func customLightingFromControls(controls *lightingControls) protocol.CustomLight
 }
 
 func (u *UI) setCustomLighting(controls *lightingControls, settings protocol.CustomLightingSettings) {
+	u.stopLightingGIF()
 	u.withoutAutoSync(func() {
 		// Keep the shared map used by the tab's callbacks and saved UI state.
 		if controls.keyColors == nil {
@@ -326,6 +362,7 @@ func (u *UI) setCustomLighting(controls *lightingControls, settings protocol.Cus
 }
 
 func (u *UI) setLightingSettings(controls *lightingControls, settings protocol.LightingSettings) {
+	u.stopLightingGIF()
 	u.withoutAutoSync(func() {
 		controls.updating = true
 		controls.effect.SetSelected(effectName(settings.Effect, u.i18n.T))

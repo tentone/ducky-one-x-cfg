@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -12,6 +13,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	fyneTest "fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
@@ -139,6 +141,90 @@ func TestDecodeLightingImageRejectsInvalidAndOversizedFiles(t *testing.T) {
 	binary.BigEndian.PutUint32(oversized[29:33], crc32.ChecksumIEEE(oversized[12:29]))
 	if _, err := decodeLightingImage(bytes.NewReader(oversized)); err == nil || !strings.Contains(err.Error(), "20 million") {
 		t.Fatalf("oversized dimensions error = %v", err)
+	}
+}
+
+func TestLightingGIFCompositesPartialFramesAndDisposal(t *testing.T) {
+	palette := color.Palette{color.Transparent, color.NRGBA{R: 255, A: 255}, color.NRGBA{B: 255, A: 255}}
+	newFrame := func(bounds image.Rectangle, index byte) *image.Paletted {
+		frame := image.NewPaletted(bounds, palette)
+		for i := range frame.Pix {
+			frame.Pix[i] = index
+		}
+		return frame
+	}
+	for _, disposal := range []byte{gif.DisposalPrevious, gif.DisposalBackground, gif.DisposalNone} {
+		t.Run(fmt.Sprintf("disposal_%d", disposal), func(t *testing.T) {
+			animation := &gif.GIF{
+				Image: []*image.Paletted{
+					newFrame(image.Rect(0, 0, 23, 6), 1),
+					newFrame(image.Rect(19, 0, 23, 6), 2),
+					newFrame(image.Rect(0, 0, 1, 1), 0),
+				},
+				Delay: []int{0, 7, 11}, Disposal: []byte{gif.DisposalNone, disposal, gif.DisposalNone},
+				LoopCount: 2, Config: image.Config{Width: 23, Height: 6, ColorModel: palette},
+			}
+			var data bytes.Buffer
+			if err := gif.EncodeAll(&data, animation); err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := decodeLightingAnimation(&data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(decoded.frames) != 3 || decoded.loopCount != 2 {
+				t.Fatalf("invalid decoded animation: %+v", decoded)
+			}
+			for i, want := range []time.Duration{100 * time.Millisecond, 70 * time.Millisecond, 110 * time.Millisecond} {
+				if decoded.frames[i].delay != want {
+					t.Errorf("frame %d delay = %v, want %v", i, decoded.frames[i].delay, want)
+				}
+				if got := decoded.frames[i].colors[0]; got != (color.NRGBA{R: 255, A: 255}) {
+					t.Errorf("frame %d left key = %v; transparent pixels should retain red", i, got)
+				}
+			}
+			if got := decoded.frames[1].colors[17]; got != (color.NRGBA{B: 255, A: 255}) {
+				t.Fatalf("partial frame = %v, want blue", got)
+			}
+			want := color.NRGBA{R: 255, A: 255}
+			if disposal == gif.DisposalBackground {
+				want = color.NRGBA{A: 255}
+			}
+			if disposal == gif.DisposalNone {
+				want = color.NRGBA{B: 255, A: 255}
+			}
+			if got := decoded.frames[2].colors[17]; got != want {
+				t.Errorf("disposed frame = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestLightingGIFLimitsBeforeDecompression(t *testing.T) {
+	// Minimal GIF structure: image data is intentionally absent. Frame limits
+	// must be caught by the preflight, before the image decoder attempts it.
+	data := []byte("GIF89a")
+	data = append(data, 1, 0, 1, 0, 0, 0, 0)
+	appendFrame := func(width, height uint16) {
+		data = append(data, 0x2c, 0, 0, 0, 0, byte(width), byte(width>>8), byte(height), byte(height>>8), 0, 2, 0)
+	}
+	for i := 0; i <= maxLightingGIFFrames; i++ {
+		appendFrame(1, 1)
+	}
+	data = append(data, 0x3b)
+	if err := validateLightingGIF(data); err == nil || !strings.Contains(err.Error(), "2000 frames") {
+		t.Fatalf("frame limit error = %v", err)
+	}
+	data = data[:13]
+	appendFrame(10000, 10000)
+	data = append(data, 0x3b)
+	if err := validateLightingGIF(data); err == nil || !strings.Contains(err.Error(), "64 million") {
+		t.Fatalf("pixel limit error = %v", err)
+	}
+	for _, truncated := range [][]byte{data[:5], data[:14], data[:18]} {
+		if err := validateLightingGIF(truncated); err == nil {
+			t.Fatal("truncated GIF accepted")
+		}
 	}
 }
 

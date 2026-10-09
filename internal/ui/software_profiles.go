@@ -343,10 +343,15 @@ func (u *UI) runProfileTaskWithFeedback(work func(context.Context) (func(), erro
 		return
 	}
 	u.setBusy(true, u.i18n.T("software_profiles.working"))
+	frameDone := u.lightingFrameDone
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), softwareProfileTimeout)
 		defer cancel()
-		apply, err := work(ctx)
+		var apply func()
+		err := waitLightingFrame(ctx, frameDone)
+		if err == nil {
+			apply, err = work(ctx)
+		}
 		fyne.Do(func() {
 			u.setBusy(false, "")
 			if err != nil {

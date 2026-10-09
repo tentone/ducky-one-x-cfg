@@ -63,7 +63,10 @@ type UI struct {
 	debug            debugControls
 	softwareProfiles *softwareProfileControls
 
-	autoSyncState autoSyncState
+	autoSyncState       autoSyncState
+	lightingGIF         *lightingGIFPlayback
+	lightingFrameDone   <-chan struct{}
+	lightingFrameCancel context.CancelFunc
 }
 
 // Options controls desktop startup behavior.
@@ -105,6 +108,10 @@ func Run(options Options) error {
 				u.profileShortcuts.Close()
 			}
 			u.cancelAutoSync()
+			u.stopLightingGIF()
+			if u.lightingFrameCancel != nil {
+				u.lightingFrameCancel()
+			}
 			close(u.done)
 			if u.lighting.animator != nil {
 				u.lighting.animator.Stop()
@@ -273,6 +280,7 @@ func (u *UI) refreshDevices() {
 
 func (u *UI) toggleConnection() {
 	if u.client != nil {
+		u.stopLightingGIF()
 		u.autoConnect = false
 		if err := u.manager.Disconnect(); err != nil {
 			u.showError(err)
@@ -481,6 +489,7 @@ func (u *UI) changeProfile(value string) {
 }
 
 func (u *UI) clearLoadedState() {
+	u.stopLightingGIF()
 	u.keys.mapping = nil
 	u.keys.current.SetText("—")
 	u.updateKeyKeyboard(&u.keys)
@@ -501,9 +510,14 @@ func (u *UI) run(work func(context.Context) (func(), error)) {
 		return
 	}
 	u.setBusy(true, u.i18n.T("connection.working"))
+	frameDone := u.lightingFrameDone
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
+		if err := waitLightingFrame(ctx, frameDone); err != nil {
+			fyne.Do(func() { u.finish(nil, err) })
+			return
+		}
 		apply, err := work(ctx)
 		fyne.Do(func() { u.finish(apply, err) })
 	}()
@@ -568,6 +582,7 @@ type localizedUIState struct {
 	mapping           []protocol.Assignment
 	lighting          protocol.LightingSettings
 	customLighting    protocol.CustomLightingSettings
+	gifSpeed          float64
 	actuationKey      string
 	actuation         []protocol.ActuationSetting
 	mptPreset         string
@@ -590,11 +605,13 @@ func (u *UI) changeLanguage(name string) {
 	}
 
 	state := u.captureLocalizedUIState()
+	playback := u.lightingGIF
 	if !u.i18n.SetLanguage(language) {
 		return
 	}
 	u.app.Preferences().SetString(preferenceLanguage, string(language))
 	u.cancelAutoSync()
+	u.stopLightingGIF()
 	if u.lighting.animator != nil {
 		u.lighting.animator.Stop()
 	}
@@ -603,6 +620,12 @@ func (u *UI) changeLanguage(name string) {
 		u.window.SetContent(u.content())
 		u.restoreLocalizedUIState(state)
 	})
+	if playback != nil {
+		u.lightingGIF = playback
+		u.lighting.stopGIF.Show()
+		u.lighting.gifSpeedRow.Show()
+		u.playLightingGIFFrame(playback)
+	}
 	u.window.SetTitle(u.i18n.T("app.title"))
 	u.installLightingKeyInput()
 	u.configureSystemTray()
@@ -631,6 +654,7 @@ func (u *UI) captureLocalizedUIState() localizedUIState {
 		mapping:        append([]protocol.Assignment(nil), u.keys.mapping...),
 		lighting:       lightingSettingsFromControls(&u.lighting, t),
 		customLighting: customLightingFromControls(&u.lighting),
+		gifSpeed:       u.lighting.gifSpeed.Value,
 		actuationKey:   u.actuation.key.Selected,
 		actuation:      append([]protocol.ActuationSetting(nil), u.actuation.settings...),
 		mptPreset:      u.mpt.preset.Selected,
@@ -680,6 +704,9 @@ func (u *UI) restoreLocalizedUIState(state localizedUIState) {
 	}
 	u.setLightingSettings(&u.lighting, state.lighting)
 	u.setCustomLighting(&u.lighting, state.customLighting)
+	if state.gifSpeed > 0 {
+		u.lighting.gifSpeed.SetValue(state.gifSpeed)
+	}
 	if len(state.actuation) > 0 {
 		u.setActuationSettings(&u.actuation, state.actuation)
 	}

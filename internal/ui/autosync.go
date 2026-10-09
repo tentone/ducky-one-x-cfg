@@ -82,3 +82,12 @@ func (u *UI) cancelAutoSync() {
 		delete(u.autoSyncState.timers, feature)
 	}
 }
+
+func (u *UI) cancelAutoSyncFeature(feature string) {
+	u.autoSyncState.mu.Lock()
+	defer u.autoSyncState.mu.Unlock()
+	if timer := u.autoSyncState.timers[feature]; timer != nil {
+		timer.Stop()
+		delete(u.autoSyncState.timers, feature)
+	}
+}

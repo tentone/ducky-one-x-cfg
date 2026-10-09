@@ -47,10 +47,22 @@ registers the current executable, so use a permanent build rather than `go run`.
 In **Lighting**, select the **Custom / per-key** effect and choose **Upload image** to turn a local PNG, JPEG, or GIF into
 custom per-key lighting. The image is fitted across the full keyboard layout;
 each key receives the average color of its area. Transparent areas are unlit,
-and GIFs use the first frame. Adjust brightness or paint individual keys in the
-preview, then click **Apply** (or enable **Auto sync**). Import replaces the
+and animated GIFs play automatically with their frame timing and loop settings,
+even while the window is minimized or hidden in the tray. Every frame is uploaded
+as custom key colors, independently of **Auto sync**. Uploads are serialized;
+playback slows down if a frame takes longer to send than its GIF delay.
+Use **Playback speed** while a GIF is playing to change its speed from **0.25×**
+to **4×**; **1×** uses the original timing. Changes take effect during playback,
+including in the tray. The keyboard's upload speed still limits the frame rate.
+Use **Stop animation** to keep the current frame. Painting keys, clearing colors,
+switching effects, loading a configuration, or disconnecting also stops playback.
+For still images, adjust brightness or paint individual keys in the preview,
+then click **Apply** (or enable **Auto sync**). Import replaces the
 current custom colors. Images are processed locally, with limits of 32 MB and
-20 million pixels.
+20 million pixels per image; GIFs are also limited to 2000 frames and 64 million
+total decoded frame pixels. GIF playback requires this app to keep running;
+quitting leaves the last uploaded frame on the keyboard. Software profiles save
+the current frame's colors, rather than the GIF itself.
 
 ## Run from source
 
